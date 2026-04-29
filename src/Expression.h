@@ -17,6 +17,7 @@ public:
     // Clause creation
     void AddClause(const Clause& clause);
     void AddClauses(const std::vector<Clause>& newClauses);
+    void AddEquals(Literal a, Literal b);
     void AddEquals(Literal v, const Clause& clause); // v = (clause)
     void AddAImpliesBEqualCOrD(Literal a, Literal b, Literal c, Literal d); // a -> (b = (c or d))
     void AddAImpliesBEqualCAndD(Literal a, Literal b, Literal c, Literal d); // a -> (b = (c and d))

@@ -76,7 +76,23 @@ void Transpose(uint64_t* transposed, uint8_t n, const std::vector<uint64_t>& out
 	}
 }
 
-std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix)
+uint64_t ReverseBits(uint64_t x)
+{
+	x = __builtin_bswap64(x);
+	x = ((x >> 1) & 0x5555555555555555ULL) | ((x & 0x5555555555555555ULL) << 1);
+	x = ((x >> 2) & 0x3333333333333333ULL) | ((x & 0x3333333333333333ULL) << 2);
+	x = ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL) | ((x & 0x0F0F0F0F0F0F0F0FULL) << 4);
+	return x;
+}
+
+bool HasSmallerMirror(uint8_t n, uint64_t input)
+{
+	uint64_t flipped = ~input;
+	uint64_t reversed = ReverseBits(flipped) >> (64 - n);
+	return input > reversed;
+}
+
+std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix, bool symmetric)
 {
 	std::vector<bool> isOutput((1ULL << n), false);
 	std::vector<uint64_t> allOutputs;
@@ -116,6 +132,7 @@ std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix)
 		for (uint64_t output : transposed)
 		{
 			if (IsSorted(n, output)) continue;
+			if (symmetric && HasSmallerMirror(n, output)) continue;
 			if (!isOutput[output]) allOutputs.push_back(output);
 			isOutput[output] = true;
 		}
@@ -493,7 +510,25 @@ void Psi3b(uint8_t n, uint8_t d, Expression& expr)
 	}
 }
 
-Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> inputs, bool improved)
+void ForceSymmetry(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t k = 1; k <= d; k++)
+	{
+		for (uint8_t i = 1; i <= n - 1; i++)
+		{
+			for (uint8_t j = i + 1; j <= n; j++)
+			{
+				uint8_t iSym = n + 1 - j;
+				uint8_t jSym = n + 1 - i;
+
+				if (iSym < i || (iSym == i && jSym < j))
+					expr.AddEquals(COMP_VAR(k, i, j), COMP_VAR(k, iSym, jSym));
+			}
+		}
+	}
+}
+
+Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> inputs, bool improved, bool symmetric)
 {
 	Expression expr;
 
@@ -531,6 +566,8 @@ Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> in
 		else
 			AddInput(n, d, expr, input);
 
+	if (symmetric) ForceSymmetry(n, d, expr);
+
 	Phi1(n, d, expr, d);
 	Phi2(n, d, expr);
 	Phi3(n, d, expr);
@@ -549,6 +586,7 @@ int main()
 {
 	uint8_t n = 28;
 	uint8_t d = 13;
+	bool symmetric = true;
 
 	Network prefix = {{
 			{0,27},{1,26},{2,25},{3,24},{4,23},{5,22},{6,21},{7,20},{8,9},{10,11},{12,15},{13,14},{16,17},{18,19},
@@ -560,10 +598,10 @@ int main()
 		}};
 	uint8_t prefixDepth = 6;
 
-	auto prefixOutputs = UnsortedPrefixOutputs(n, prefix);
+	auto prefixOutputs = UnsortedPrefixOutputs(n, prefix, symmetric);
 	std::println("Num outputs: {}", prefixOutputs.size());
 
-	Expression expr = BuildNetworkExpr(n, d - prefixDepth, prefixOutputs, true);
+	Expression expr = BuildNetworkExpr(n, d - prefixDepth, prefixOutputs, true, symmetric);
 	expr.SanityCheck();
 	expr.SaveToFile(std::format("wang.cnf", n, d));
 

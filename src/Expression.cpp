@@ -33,6 +33,12 @@ void Expression::AddClauses(const std::vector<Clause>& newClauses)
 	clauses.insert(clauses.end(), newClauses.begin(), newClauses.end());
 }
 
+void Expression::AddEquals(Literal a, Literal b)
+{
+	AddClause({ -a, b });
+	AddClause({ a, -b });
+}
+
 void Expression::AddEquals(Literal v, const Clause& clause)
 {
 	// Add v -> (clause[0] or clause[1] or ...)
