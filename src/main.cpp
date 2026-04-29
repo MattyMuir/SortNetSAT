@@ -330,6 +330,169 @@ void AddInputImproved(uint8_t n, uint8_t d, Expression& expr, uint64_t input)
 	}
 }
 
+void Phi1(uint8_t n, uint8_t d, Expression& expr, uint8_t l)
+{
+	for (uint8_t i = 1; i <= n - 2; i++)
+	{
+		for (uint8_t j = i + 2; j <= n; j++)
+		{
+			Clause clause{ -COMP_VAR(l, i, j) };
+			for (uint8_t k = l + 1; k <= d; k++)
+			{
+				clause.push_back(USED_VAR(k, i));
+				clause.push_back(USED_VAR(k, j));
+			}
+			expr.AddClause(clause);
+		}
+	}
+}
+
+void Phi2(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 4; i++)
+		for (uint8_t j = i + 4; j <= n; j++)
+			expr.AddClause({ -COMP_VAR(d - 1, i, j) });
+}
+
+void Phi3(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 3; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d - 1, i, i + 3),
+			COMP_VAR(d, i, i + 1)
+			});
+
+		expr.AddClause({
+			-COMP_VAR(d - 1, i, i + 3),
+			COMP_VAR(d, i + 2, i + 3)
+			});
+	}
+}
+
+void Phi4(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 2; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d - 1, i, i + 2),
+			COMP_VAR(d, i, i + 1),
+			COMP_VAR(d, i + 1, i + 2),
+			});
+	}
+}
+
+void Psi1(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 1; i++)
+	{
+		expr.AddClause({
+			USED_VAR(d, i),
+			USED_VAR(d, i + 1),
+			});
+	}
+}
+
+void Psi2a(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 3; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			-COMP_VAR(d, i + 2, i + 3),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 2)
+			});
+
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			-COMP_VAR(d, i + 2, i + 3),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 3)
+			});
+
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			-COMP_VAR(d, i + 2, i + 3),
+			USED_VAR(d - 1, i + 1),
+			USED_VAR(d - 1, i + 2)
+			});
+
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			-COMP_VAR(d, i + 2, i + 3),
+			USED_VAR(d - 1, i + 1),
+			USED_VAR(d - 1, i + 3)
+			});
+	}
+}
+
+void Psi2b(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 2; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			USED_VAR(d, i + 2),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 2)
+			});
+
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			USED_VAR(d, i + 2),
+			USED_VAR(d - 1, i + 1),
+			USED_VAR(d - 1, i + 2)
+			});
+	}
+}
+
+void Psi2c(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 2; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d, i + 1, i + 2),
+			USED_VAR(d, i),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 1)
+			});
+
+		expr.AddClause({
+			-COMP_VAR(d, i + 1, i + 2),
+			USED_VAR(d, i),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 2)
+			});
+	}
+}
+
+void Psi3a(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 1; i <= n - 2; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			USED_VAR(d, i + 2),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 1),
+			});
+	}
+}
+
+void Psi3b(uint8_t n, uint8_t d, Expression& expr)
+{
+	for (uint8_t i = 2; i <= n - 1; i++)
+	{
+		expr.AddClause({
+			-COMP_VAR(d, i, i + 1),
+			USED_VAR(d, i - 1),
+			USED_VAR(d - 1, i),
+			USED_VAR(d - 1, i + 1)
+			});
+	}
+}
+
 Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> inputs, bool improved)
 {
 	Expression expr;
@@ -350,16 +513,14 @@ Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> in
 		// === 'oneDown' and 'oneUp' variables ===
 		CreateOneUpDown(n, d, expr);
 	}
-	else
+
+	// === 'used' variables ===
+	for (uint8_t k = 1; k <= d; k++)
 	{
-		// === 'used' variables ===
-		for (uint8_t k = 1; k <= d; k++)
+		for (uint8_t i = 1; i <= n; i++)
 		{
-			for (uint8_t i = 1; i <= n; i++)
-			{
-				Var used = expr.CreateVar(std::format("used^{}_{}", k, i));
-				expr.AddEquals(used, Used(n, expr, k, i));
-			}
+			Var used = expr.CreateVar(std::format("used^{}_{}", k, i));
+			expr.AddEquals(used, Used(n, expr, k, i));
 		}
 	}
 	
@@ -370,13 +531,24 @@ Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> in
 		else
 			AddInput(n, d, expr, input);
 
+	Phi1(n, d, expr, d);
+	Phi2(n, d, expr);
+	Phi3(n, d, expr);
+	Phi4(n, d, expr);
+	Psi1(n, d, expr);
+	Psi2a(n, d, expr);
+	Psi2b(n, d, expr);
+	Psi2c(n, d, expr);
+	Psi3a(n, d, expr);
+	Psi3b(n, d, expr);
+
 	return expr;
 }
 
 int main()
 {
 	uint8_t n = 28;
-	uint8_t d = 12;
+	uint8_t d = 13;
 
 	Network prefix = {{
 			{0,27},{1,26},{2,25},{3,24},{4,23},{5,22},{6,21},{7,20},{8,9},{10,11},{12,15},{13,14},{16,17},{18,19},
