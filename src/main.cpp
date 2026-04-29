@@ -376,12 +376,8 @@ Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> in
 int main()
 {
 	uint8_t n = 28;
-	uint8_t d = 13;
+	uint8_t d = 12;
 
-#if 0
-	Network prefix = PrefixPar(n);
-	uint8_t prefixDepth = 1;
-#else
 	Network prefix = {{
 			{0,27},{1,26},{2,25},{3,24},{4,23},{5,22},{6,21},{7,20},{8,9},{10,11},{12,15},{13,14},{16,17},{18,19},
 			{0,1},{2,3},{4,5},{6,7},{8,10},{9,11},{12,14},{13,15},{16,18},{17,19},{20,21},{22,23},{24,25},{26,27},
@@ -391,22 +387,13 @@ int main()
 			{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
 		}};
 	uint8_t prefixDepth = 6;
-#endif
 
-	TIMER(t);
 	auto prefixOutputs = UnsortedPrefixOutputs(n, prefix);
-	STOP_LOG(t);
 	std::println("Num outputs: {}", prefixOutputs.size());
-	return 0;
 
 	Expression expr = BuildNetworkExpr(n, d - prefixDepth, prefixOutputs, true);
-	expr.AddClause({ 5, 6 });
-	expr.AddClause({ 5, 6 });
-	expr.CreateVar("unused");
-	expr.AddClause({});
 	expr.SanityCheck();
-	expr.SaveToFile(std::format("cnfs/wang.cnf", n, d));
-	//expr.PrettyPrint();
+	expr.SaveToFile(std::format("wang.cnf", n, d));
 
 #if 0
 	Assignment assignment{ "assignment.txt" };

@@ -105,9 +105,15 @@ void Expression::SanityCheck() const
 			std::println("{}", LiteralToStr(v));
 
 	std::println("=========================");
+	size_t numEmpty = 0;
 	for (const Clause& clause : clauses)
-		if (clause.empty())
-			std::println("Contains empty clause!");
+		numEmpty += clause.empty();
+	std::println("Num empty: {}", numEmpty);
+
+	size_t numUnit = 0;
+	for (const Clause& clause : clauses)
+		numUnit += (clause.size() == 1);
+	std::println("Num unit: {}", numUnit);
 }
 
 std::string Expression::LiteralToStr(Literal l) const
