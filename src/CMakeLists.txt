@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SortNetSAT
 
 # === Create Executable ===
-add_executable(SortNetSAT "main.cpp" "Assignment.h" "Expression.h" "Timer.h" "Assignment.cpp" "Expression.cpp")
+add_executable(SortNetSAT "main.cpp" "Assignment.h" "Expression.h" "Timer.h" "Assignment.cpp" "Expression.cpp" "prefixes.h" "prefixes.cpp" "Network.h" "Network.cpp")
 
 # === Feature Enables ===
 if (SNS_MSVC_STATIC_RUNTIME)

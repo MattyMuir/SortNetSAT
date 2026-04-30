@@ -4,154 +4,15 @@
 
 #include "Expression.h"
 #include "Assignment.h"
+#include "Network.h"
+#include "prefixes.h"
 #include "Timer.h"
 
-#define COMP_VAR(k, i, j) expr.GetVar(std::format("g^{}_{},{}", k, i, j))
-#define USED_VAR(k, i) expr.GetVar(std::format("used^{}_{}", k, i))
-#define V_VAR(input, k, i) expr.GetVar(std::format("v{}^{}_{}", input, k, i))
-#define ONEDOWN_VAR(k, i, j) expr.GetVar(std::format("oneDown^{}_{},{}", k, i, j))
-#define ONEUP_VAR(k, i, j) expr.GetVar(std::format("oneUp^{}_{},{}", k, i, j))
-
-struct CE { uint8_t lo, hi; };
-using Network = std::vector<CE>;
-
-Network PrefixPar(uint8_t n)
-{
-	Network prefix;
-	for (uint8_t i = 0; i < n - 1; i += 2)
-		prefix.push_back(CE{ i, (uint8_t)(i + 1) });
-	return prefix;
-}
-
-Network PrefixBZ(uint8_t n)
-{
-	Network prefix;
-	for (uint8_t i = 0; i < n / 2; i++)
-		prefix.push_back(CE{ i, (uint8_t)(n - 1 - i) });
-	return prefix;
-}
-
-bool IsSorted(uint8_t n, uint64_t output)
-{
-	uint64_t numZeros = n - std::popcount(output);
-	uint64_t sorted = ((1ULL << n) - 1) ^ ((1ULL << numZeros) - 1);
-	return output == sorted;
-}
-
-static uint64_t Transpose8x8(uint64_t m)
-{
-	uint64_t t;
-	t = (m ^ (m >> 7)) & 0x00AA00AA00AA00AAULL; m ^= t ^ (t << 7);
-	t = (m ^ (m >> 14)) & 0x0000CCCC0000CCCCULL; m ^= t ^ (t << 14);
-	t = (m ^ (m >> 28)) & 0x00000000F0F0F0F0ULL; m ^= t ^ (t << 28);
-	return m;
-}
-
-void Transpose(uint64_t* transposed, uint8_t n, const std::vector<uint64_t>& outputs)
-{
-	memset(transposed, 0, 64 * sizeof(uint64_t));
-
-	for (uint8_t groupBase = 0; groupBase < n; groupBase += 8)
-	{
-		const uint8_t groupEnd = std::min<uint8_t>(groupBase + 8, n);
-		const uint8_t groupIdx = groupBase >> 3; // which byte lane within each transposed uint64_t
-
-		for (uint8_t byteIdx = 0; byteIdx < 8; byteIdx++)
-		{
-			// Gather byte `byteIdx` from each channel in this group into one uint64_t
-			// (one channel per byte of `packed`)
-			uint64_t packed = 0;
-			for (uint8_t g = groupBase; g < groupEnd; g++)
-				packed |= (uint64_t)((outputs[g] >> (byteIdx * 8)) & 0xFF) << ((g - groupBase) * 8);
-
-			// Transpose the 8×8 bit matrix: rows were channels, columns were bit positions
-			// After transpose: row p = all 8 channels' contribution to output column byteIdx*8+p
-			uint64_t tp = Transpose8x8(packed);
-
-			// Scatter: write byte p of tp into byte `groupIdx` of transposed[byteIdx*8+p].
-			// All 8 writes land in the same cache line.
-			for (uint8_t p = 0; p < 8; p++)
-				reinterpret_cast<uint8_t*>(&transposed[byteIdx * 8 + p])[groupIdx] = (uint8_t)(tp >> (p * 8));
-		}
-	}
-}
-
-uint64_t ReverseBits(uint64_t x)
-{
-	x = __builtin_bswap64(x);
-	x = ((x >> 1) & 0x5555555555555555ULL) | ((x & 0x5555555555555555ULL) << 1);
-	x = ((x >> 2) & 0x3333333333333333ULL) | ((x & 0x3333333333333333ULL) << 2);
-	x = ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL) | ((x & 0x0F0F0F0F0F0F0F0FULL) << 4);
-	return x;
-}
-
-bool HasSmallerMirror(uint8_t n, uint64_t input)
-{
-	uint64_t flipped = ~input;
-	uint64_t reversed = ReverseBits(flipped) >> (64 - n);
-	return input > reversed;
-}
-
-std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix, bool symmetric)
-{
-	std::vector<bool> isOutput((1ULL << n), false);
-	std::vector<uint64_t> allOutputs;
-
-	std::vector<uint64_t> inputs{
-		0b1010101010101010101010101010101010101010101010101010101010101010,
-		0b1100110011001100110011001100110011001100110011001100110011001100,
-		0b1111000011110000111100001111000011110000111100001111000011110000,
-		0b1111111100000000111111110000000011111111000000001111111100000000,
-		0b1111111111111111000000000000000011111111111111110000000000000000,
-		0b1111111111111111111111111111111100000000000000000000000000000000
-	};
-	inputs.resize(n);
-	std::vector<uint64_t> outputs;
-
-	uint64_t numPacks = ((1ULL << n) + 63) / 64;
-	for (uint64_t packIdx = 0; packIdx < numPacks; packIdx++)
-	{
-		// Update inputs based on the pack index
-		for (uint8_t i = 0; (int)i < n - 6; i++)
-			inputs[i + 6] = (packIdx & (1ULL << i)) ? (uint64_t)-1 : 0;
-
-		// Run the prefix
-		outputs = inputs;
-		for (auto [lo, hi] : prefix)
-		{
-			uint64_t newLo = outputs[lo] & outputs[hi];
-			outputs[hi] = outputs[lo] | outputs[hi];
-			outputs[lo] = newLo;
-		}
-
-		// Transpose the outputs
-		uint64_t transposed[64];
-		Transpose(transposed, n, outputs);
-
-		// Add the distinct and unsorted outputs
-		for (uint64_t output : transposed)
-		{
-			if (IsSorted(n, output)) continue;
-			if (symmetric && HasSmallerMirror(n, output)) continue;
-			if (!isOutput[output]) allOutputs.push_back(output);
-			isOutput[output] = true;
-		}
-	}
-
-	return allOutputs;
-}
-
-uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs)
-{
-	uint64_t windowWidth = 0;
-	for (uint64_t output : prefixOutputs)
-	{
-		uint64_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(output));
-		uint64_t tailingOnes = std::countl_one(output << (64 - n));
-		windowWidth += (n - leadingZeros - tailingOnes);
-	}
-	return windowWidth;
-}
+#define COMP_VAR(k, i, j)		expr.GetVar(std::format("g^{}_{},{}", k, i, j))
+#define USED_VAR(k, i)			expr.GetVar(std::format("used^{}_{}", k, i))
+#define V_VAR(input, k, i)		expr.GetVar(std::format("v{}^{}_{}", input, k, i))
+#define ONEDOWN_VAR(k, i, j)	expr.GetVar(std::format("oneDown^{}_{},{}", k, i, j))
+#define ONEUP_VAR(k, i, j)		expr.GetVar(std::format("oneUp^{}_{},{}", k, i, j))
 
 std::vector<Clause> Once(uint8_t n, const Expression& expr, uint8_t k, uint8_t i)
 {
@@ -582,8 +443,24 @@ Expression BuildNetworkExpr(uint8_t n, uint8_t d, const std::vector<uint64_t> in
 	return expr;
 }
 
+void ParseAssignment(const std::string& filepath, uint8_t n, uint8_t d, Expression& expr)
+{
+	Assignment assignment{ filepath };
+
+	for (uint8_t k = 1; k <= d; k++)
+	{
+		for (uint8_t i = 1; i <= n - 1; i++)
+			for (uint8_t j = i + 1; j <= n; j++)
+				if (assignment.GetValue(COMP_VAR(k, i, j)))
+					std::print("({},{}),", i - 1, j - 1);
+
+		std::println();
+	}
+}
+
 int main()
 {
+	// === Parameters ===
 	uint8_t n = 28;
 	uint8_t d = 13;
 	bool symmetric = true;
@@ -597,25 +474,18 @@ int main()
 			{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
 		}};
 	uint8_t prefixDepth = 6;
+	// ==================
 
+	// Optimize prefix
+	prefix = OptimizePrefix(n, prefix, 20, symmetric);
 	auto prefixOutputs = UnsortedPrefixOutputs(n, prefix, symmetric);
-	std::println("Num outputs: {}", prefixOutputs.size());
+	std::println("Window width: {}", WindowWidth(n, prefixOutputs));
+	PrintNetwork(prefix);
 
+	// Build CNF formula
 	Expression expr = BuildNetworkExpr(n, d - prefixDepth, prefixOutputs, true, symmetric);
 	expr.SanityCheck();
 	expr.SaveToFile(std::format("wang.cnf", n, d));
 
-#if 0
-	Assignment assignment{ "assignment.txt" };
-	
-	for (uint8_t k = 1; k <= d - prefixDepth; k++)
-	{
-		for (uint8_t i = 1; i <= n - 1; i++)
-			for (uint8_t j = i + 1; j <= n; j++)
-				if (assignment.GetValue(COMP_VAR(k, i, j)))
-					std::print("({},{}),", i - 1, j - 1);
-
-		std::println();
-	}
-#endif
+	//ParseAssignment("assignment.txt", n, d - prefixDepth, expr);
 }
