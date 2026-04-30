@@ -5,7 +5,6 @@
 - Optimize formula generator (remove strings, add variable families/tensors)
 - Allow multiple symbolic variables to map to the same SAT variable
 - Add fixed `true` and `false` variables
-- Optimize window size manipulation by permuting outputs not networks
 
 ## Complete
 - Optimize prefix output generation
@@ -13,3 +12,4 @@
 - phi and psi constraints
 - Add an option to force network vertical symmetry
 - Window size minimization
+- Optimize window size minimization by permuting outputs not networks

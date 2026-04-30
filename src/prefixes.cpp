@@ -84,7 +84,7 @@ static inline bool HasSmallerMirror(uint8_t n, uint64_t input)
 	return input > reversed;
 }
 
-std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix, bool symmetric)
+std::vector<uint64_t> PrefixOutputs(uint8_t n, const Network& prefix, bool onlyUnsorted, bool symmetric)
 {
 	std::vector<bool> isOutput((1ULL << n), false);
 	std::vector<uint64_t> allOutputs;
@@ -123,7 +123,7 @@ std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix, bo
 		// Add the distinct and unsorted outputs
 		for (uint64_t output : transposed)
 		{
-			if (IsSorted(n, output)) continue;
+			if (onlyUnsorted && IsSorted(n, output)) continue;
 			if (symmetric && HasSmallerMirror(n, output)) continue;
 			if (!isOutput[output]) allOutputs.push_back(output);
 			isOutput[output] = true;
@@ -133,11 +133,13 @@ std::vector<uint64_t> UnsortedPrefixOutputs(uint8_t n, const Network& prefix, bo
 	return allOutputs;
 }
 
-uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs)
+uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs, bool symmetric)
 {
 	uint64_t windowWidth = 0;
 	for (uint64_t output : prefixOutputs)
 	{
+		if (symmetric && HasSmallerMirror(n, output)) continue;
+
 		uint64_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(output));
 		uint64_t tailingOnes = std::countl_one(output << (64 - n));
 		windowWidth += (n - leadingZeros - tailingOnes);
@@ -145,103 +147,43 @@ uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs)
 	return windowWidth;
 }
 
-// Distinct random pair in [0, max]
-static inline std::pair<uint8_t, uint8_t> RandomPair2(uint8_t max)
+void PermuteNetwork(Network& network, const std::vector<uint8_t>& perm)
 {
-    static std::mt19937_64 gen{ std::random_device{}() };
-    std::uniform_int_distribution<uint32_t> aDist{ 0, max };
-    std::uniform_int_distribution<uint32_t> bDist{ 0, max - 1U };
+	auto mapsTo{ perm };
 
-    uint8_t a = (uint8_t)aDist(gen);
-    uint8_t b = (uint8_t)bDist(gen);
-
-    return { a, (b == a) ? max : b };
-}
-
-void Permute(uint8_t n, Network& network, bool symmetric)
-{
-    auto [a, b] = RandomPair2(n - 1);
-
-    std::vector<uint8_t> mapsTo(n);
-    std::iota(mapsTo.begin(), mapsTo.end(), 0);
-    std::swap(mapsTo[a], mapsTo[b]);
-
-	if (symmetric)
+	for (CE& ce : network)
 	{
-		uint8_t aSym = n - 1 - b;
-		uint8_t bSym = n - 1 - a;
-		if (aSym != a) std::swap(mapsTo[aSym], mapsTo[bSym]);
-	}
-    
-    for (CE& ce : network)
-    {
-        int from = mapsTo[ce.lo];
-        int to = mapsTo[ce.hi];
-        if (from > to)
-        {
-            // All further occurcences of "from" will be replaced by "to", and vice versa
-            mapsTo[ce.lo] = to;
-            mapsTo[ce.hi] = from;
-            // Turn direction of comparator
-            ce.lo = to;
-            ce.hi = from;
-        }
-        else
-        {
-            // Correct direction, nothing to do
-            ce.lo = from;
-            ce.hi = to;
-        }
-    }
-}
-
-Network OptimizePrefix(uint8_t n, const Network& input, size_t runs, bool symmetric)
-{
-	// === Parameters ===
-	static constexpr size_t PopulationSize = 32;
-	// ==================
-
-	// Add the initial prefix to the population
-	std::multimap<uint64_t, Network> pop;
-	uint64_t initial = WindowWidth(n, UnsortedPrefixOutputs(n, input, symmetric));
-	pop.insert({ initial, input });
-
-	// Get some more population members... Just do 20 random swaps
-	for (int i = 0; i < 10; i++)
-	{
-		Network permuted{ input };
-
-		for (size_t i = 0; i < 20; i++)
-			Permute(n, permuted, symmetric);
-
-		uint64_t width = WindowWidth(n, UnsortedPrefixOutputs(n, permuted, symmetric));
-		pop.insert({ width, permuted });
-	}
-
-	for (size_t runIdx = 0; runIdx < runs; runIdx++)
-	{
-		std::println("Run: {:<6} Best: {:<10}", runIdx, pop.begin()->first);
-		std::multimap<uint64_t, Network> nextGen{ pop };
-
-		for (const auto& [windowWidth, prefix] : pop)
+		int from = mapsTo[ce.lo];
+		int to = mapsTo[ce.hi];
+		if (from > to)
 		{
-			Network permuted{ prefix };
-			Permute(n, permuted, symmetric);
-			uint64_t width = WindowWidth(n, UnsortedPrefixOutputs(n, permuted, symmetric));
-			nextGen.insert({ width, permuted });
+			// All further occurcences of "from" will be replaced by "to", and vice versa
+			mapsTo[ce.lo] = to;
+			mapsTo[ce.hi] = from;
+			// Turn direction of comparator
+			ce.lo = to;
+			ce.hi = from;
 		}
-
-		pop.clear();
-		std::set<Network> checker;
-		for (const auto& [windowWidth, prefix] : nextGen)
+		else
 		{
-			if (pop.size() >= PopulationSize) break;
-			if (checker.contains(prefix)) continue;
-
-			pop.insert({ windowWidth, prefix });
-			checker.insert(prefix);
+			// Correct direction, nothing to do
+			ce.lo = from;
+			ce.hi = to;
 		}
 	}
+}
 
-	return pop.begin()->second;
+void Permute(Network& network, const std::vector<uint8_t>& perm)
+{
+	uint8_t n = (uint8_t)perm.size();
+	std::vector<uint8_t> invPerm(n);
+	for (uint8_t i = 0; i < n; i++)
+		invPerm[perm[i]] = i;
+
+	for (CE& ce : network)
+	{
+		uint8_t newLo = invPerm[ce.lo];
+		uint8_t newHi = invPerm[ce.hi];
+		ce = { newLo, newHi };
+	}
 }
