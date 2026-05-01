@@ -4,9 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-using Var = int64_t;
-using Literal = int64_t;
-using Clause = std::vector<Literal>;
+#include "clause.h"
 
 class Expression
 {
@@ -38,9 +36,4 @@ protected:
 
     std::string LiteralToStr(Literal l) const;
     void PrettyPrint(const Clause& clause) const;
-};
-
-struct ClauseHasher
-{
-    size_t operator()(const Clause& clause) const;
 };
