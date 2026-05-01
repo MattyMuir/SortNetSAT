@@ -513,8 +513,8 @@ int main()
 	// ==================
 
 	// Optimize prefix
-	WindowMinimizer minimizer{ n, symmetric };
-	prefix = minimizer.Optimize(prefix, 300, 300);
+	//WindowMinimizer minimizer{ n, symmetric };
+	//prefix = minimizer.Optimize(prefix, 300, 300);
 
 	auto prefixOutputs = PrefixOutputs(n, prefix, true, symmetric);
 	std::println("Window width: {}", WindowWidth(n, prefixOutputs, symmetric));

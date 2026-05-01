@@ -4,6 +4,7 @@
 #include <charconv>
 #include <format>
 #include <unordered_set>
+#include <algorithm>
 
 Var Expression2::NextVar()
 {
@@ -12,9 +13,15 @@ Var Expression2::NextVar()
 
 void Expression2::AddClause(const Clause& clause)
 {
-	for (Literal l : clause)
-		if (l == 0)
-			bool feghgh = true;
+	Clause sorted{ clause };
+	std::sort(sorted.begin(), sorted.end());
+
+	if (clauseSet.contains(sorted))
+		bool jdfhj = true;
+	else clauseSet.insert(sorted);
+
+	if (clause.size() == 1)
+		bool dfjhj = true;
 
 	clauses.push_back(clause);
 }
@@ -41,11 +48,14 @@ void Expression2::SanityCheck() const
 {
 	// Duplicate clauses
 	size_t numDuplicate = 0;
-	std::unordered_set<Clause, ClauseHasher, ClauseEq> allClauses;
+	std::unordered_set<Clause, ClauseHasher> allClauses;
 	for (const Clause& clause : clauses)
 	{
-		if (allClauses.contains(clause)) numDuplicate++;
-		else allClauses.insert(clause);
+		Clause sorted{ clause };
+		std::sort(sorted.begin(), sorted.end());
+
+		if (allClauses.contains(sorted)) numDuplicate++;
+		else allClauses.insert(sorted);
 	}
 
 	// Unused variables
@@ -78,6 +88,7 @@ void Expression2::SanityCheck() const
 		numDuplicateLiteral += (vars.size() != clause.size());
 	}
 
+	std::println("True clauses  : {}", allClauses.size());
 	std::println("Num duplicate : {}", numDuplicate);
 	std::println("Num unused    : {}", numUnused);
 	std::println("Num empty     : {}", numEmpty);

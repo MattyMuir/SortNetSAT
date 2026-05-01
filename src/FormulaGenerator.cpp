@@ -63,13 +63,13 @@ void FormulaGenerator::InitializeVariables()
 	for (uint8_t k = 0; k < d; k++)
 		for (uint8_t i = 0; i < n; i++)
 			for (uint8_t j = i; j < n; j++)
-				oneDown(k, i, j) = expr.NextVar();
+				oneDown(k, i, j) = (i == j) ? falseVar : expr.NextVar();
 
 	// OneUp variables
 	for (uint8_t k = 0; k < d; k++)
 		for (uint8_t i = 0; i < n; i++)
 			for (uint8_t j = i; j < n; j++)
-				oneUp(k, i, j) = symmetric ? oneDown(k, n - 1 - j, n - 1 - i) : expr.NextVar();
+				oneUp(k, i, j) = (symmetric || i == j) ? oneDown(k, n - 1 - j, n - 1 - i) : expr.NextVar();
 
 	// V variables
 	v = VariableFamily{ inputs.size(), d + 1U, n };
@@ -112,10 +112,13 @@ void FormulaGenerator::AddOnce(uint8_t k, uint8_t i)
 	for (uint8_t j = 0; j < n; j++)
 	{
 		if (j == i) continue;
-		for (uint8_t l = 0; l < n; l++)
+		for (uint8_t l = j + 1; l < n; l++)
 		{
 			if (l == i) continue;
-			if (j == l) continue;
+			
+			uint8_t lo0 = std::min(i, j);
+			uint8_t hi0 = std::max(i, j);
+			if (symmetric && lo0 > n - 1 - hi0) continue;
 
 			Var first = comps(k, std::min(i, j), std::max(i, j));
 			Var second = comps(k, std::min(i, l), std::max(i, l));
@@ -144,10 +147,10 @@ void FormulaGenerator::AddUpDownDefinitions()
 	{
 		for (uint8_t i = 0; i < n; i++)
 		{
-			for (uint8_t j = i; j < n; j++)
+			for (uint8_t j = i + 1; j < n; j++)
 			{
 				AddOneDownDefinition(k, i, j);
-				AddOneUpDefinition(k, i, j);
+				if (!symmetric) AddOneUpDefinition(k, i, j);
 			}
 		}
 	}
