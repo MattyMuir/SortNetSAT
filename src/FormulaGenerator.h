@@ -30,7 +30,30 @@ protected:
 	std::vector<uint64_t> inputs;
 
 	Expression2 expr;
+	Var trueVar, falseVar;
 	VariableFamily comps, used, oneDown, oneUp, v;
 
+	void CreateTrueFalse();
 	void InitializeVariables();
+	void AddValid();
+	void AddOnce(uint8_t k, uint8_t i);
+	void AddUsedDefinitions();
+	void AddUpDownDefinitions();
+	void AddOneDownDefinition(uint8_t k, uint8_t i, uint8_t j);
+	void AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j);
+	void AddInput(size_t inputIdx);
+
+	void AddPhi1(uint8_t l);
+	void AddPhi2();
+	void AddPhi3();
+	void AddPhi4();
+	void AddPsi1();
+	void AddPsi2a();
+	void AddPsi2b();
+	void AddPsi2c();
+	void AddPsi3a();
+	void AddPsi3b();
+
+	uint64_t LeadingZeros(uint64_t input);
+	uint64_t TailingOnes(uint64_t input);
 };

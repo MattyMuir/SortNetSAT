@@ -10,6 +10,7 @@
 #include "WindowMinimizer.h"
 #include "Timer.h"
 #include "Expression2.h"
+#include "FormulaGenerator.h"
 
 #define COMP_VAR(k, i, j)		expr.GetVar(std::format("g^{}_{},{}", k, i, j))
 #define USED_VAR(k, i)			expr.GetVar(std::format("used^{}_{}", k, i))
@@ -497,5 +498,31 @@ void GenerateFormula()
 
 int main()
 {
+	// === Parameters ===
+	uint8_t n = 16;
+	uint8_t d = 9;
+	bool symmetric = true;
 
+	Network prefix = { {
+			{0,5},{1,4},{2,12},{3,13},{6,7},{8,9},{10,15},{11,14},
+			{0,2},{1,10},{3,6},{4,7},{5,14},{8,11},{9,12},{13,15},
+			{0,8},{1,3},{2,11},{4,13},{5,9},{6,10},{7,15},{12,14},
+			{0,1},{2,4},{3,8},{5,6},{7,12},{9,10},{11,13},{14,15}
+		} };
+	uint8_t prefixDepth = 4;
+	// ==================
+
+	// Optimize prefix
+	WindowMinimizer minimizer{ n, symmetric };
+	prefix = minimizer.Optimize(prefix, 300, 300);
+
+	auto prefixOutputs = PrefixOutputs(n, prefix, true, symmetric);
+	std::println("Window width: {}", WindowWidth(n, prefixOutputs, symmetric));
+	PrintNetwork(prefix);
+
+	// Build CNF formula
+	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
+	Expression2 expr = generator.Generate(prefixOutputs);
+	expr.SanityCheck();
+	expr.SaveToFile("wang.cnf");
 }

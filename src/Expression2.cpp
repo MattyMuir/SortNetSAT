@@ -12,7 +12,23 @@ Var Expression2::NextVar()
 
 void Expression2::AddClause(const Clause& clause)
 {
+	for (Literal l : clause)
+		if (l == 0)
+			bool feghgh = true;
+
 	clauses.push_back(clause);
+}
+
+void Expression2::AddEquals(Literal v, const Clause& clause)
+{
+	// Add v -> (clause[0] or clause[1] or ...)
+	Clause ps{ clause };
+	ps.push_back(-v);
+	AddClause(ps);
+
+	// Add (!v -> !clause[0]) and (!v -> !clause[1]) and ...
+	for (Literal lit : clause)
+		AddClause({ v, -lit });
 }
 
 void Expression2::SaveToFile(const std::string& filepath)
@@ -25,7 +41,7 @@ void Expression2::SanityCheck() const
 {
 	// Duplicate clauses
 	size_t numDuplicate = 0;
-	std::unordered_set<Clause, ClauseHasher> allClauses;
+	std::unordered_set<Clause, ClauseHasher, ClauseEq> allClauses;
 	for (const Clause& clause : clauses)
 	{
 		if (allClauses.contains(clause)) numDuplicate++;
@@ -52,10 +68,21 @@ void Expression2::SanityCheck() const
 	for (const Clause& clause : clauses)
 		numUnit += (clause.size() == 1);
 
+	// Clauses with duplicate literals
+	size_t numDuplicateLiteral = 0;
+	for (const Clause& clause : clauses)
+	{
+		std::unordered_set<Var> vars;
+		for (Literal l : clause) vars.insert(std::abs(l));
+
+		numDuplicateLiteral += (vars.size() != clause.size());
+	}
+
 	std::println("Num duplicate : {}", numDuplicate);
 	std::println("Num unused    : {}", numUnused);
 	std::println("Num empty     : {}", numEmpty);
 	std::println("Num unit      : {}", numUnit);
+	std::println("Num dup lit   : {}", numDuplicateLiteral);
 }
 
 Expression2::Serializer::Serializer(const std::string& filepath)

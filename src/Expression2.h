@@ -30,6 +30,7 @@ protected:
 public:
     Var NextVar();
     void AddClause(const Clause& clause);
+    void AddEquals(Literal v, const Clause& clause);
 
     void SaveToFile(const std::string& filepath);
     void SanityCheck() const;
