@@ -10,3 +10,4 @@ struct CE
 using Network = std::vector<CE>;
 
 void PrintNetwork(const Network& network);
+Network Append(const Network& a, const Network& b);

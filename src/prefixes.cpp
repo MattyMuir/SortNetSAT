@@ -173,6 +173,33 @@ void PermuteNetwork(Network& network, const std::vector<uint8_t>& perm)
 	}
 }
 
+void Untangle(uint8_t n, Network& network)
+{
+	std::vector<uint8_t> mapsTo(n);
+	std::iota(mapsTo.begin(), mapsTo.end(), 0);
+
+	for (CE& ce : network)
+	{
+		int from = mapsTo[ce.lo];
+		int to = mapsTo[ce.hi];
+		if (from > to)
+		{
+			// All further occurcences of "from" will be replaced by "to", and vice versa
+			mapsTo[ce.lo] = to;
+			mapsTo[ce.hi] = from;
+			// Turn direction of comparator
+			ce.lo = to;
+			ce.hi = from;
+		}
+		else
+		{
+			// Correct direction, nothing to do
+			ce.lo = from;
+			ce.hi = to;
+		}
+	}
+}
+
 void Permute(Network& network, const std::vector<uint8_t>& perm)
 {
 	uint8_t n = (uint8_t)perm.size();

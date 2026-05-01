@@ -23,20 +23,13 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 		for (const auto& [_, perm] : globalPopulation)
 			AddToPopulation(nextGeneration, RandomSwap(perm));
 
-		// Add children to global population
-		globalPopulation.clear();
+		std::swap(globalPopulation, nextGeneration);
 
-		// Keep only 'populationSize' best distinct permutations
-		std::set<std::vector<uint8_t>> inPopulation;
-		for (const auto& [windowWidth, perm] : nextGeneration)
-		{
-			if (globalPopulation.size() >= populationSize) break;
-
-			if (inPopulation.contains(perm.perm)) continue;
-			inPopulation.insert(perm.perm);
-
-			globalPopulation.emplace(windowWidth, perm);
-		}
+		// Keep only 'populationSize' best permutations
+		if (globalPopulation.size() <= populationSize) continue;
+		auto cutoff = globalPopulation.begin();
+		std::advance(cutoff, populationSize);
+		globalPopulation.erase(cutoff, globalPopulation.end());
 	}
 
 	Network optPrefix{ initialPrefix };
@@ -63,25 +56,18 @@ void WindowMinimizer::AddToPopulation(Population& population, const Network& pre
 WindowMinimizer::BitswapMask WindowMinimizer::GetBitswapMask(uint8_t ch0, uint8_t ch1) const
 {
 	if (ch0 > ch1) std::swap(ch0, ch1);
-	uint8_t shift = ch1 - ch0;
-	uint64_t ch0Mask = 1ULL << ch0;
-	uint64_t ch1Mask = 1ULL << ch1;
 
-	uint64_t stationaryMask = (1ULL << n) - 1;
-	stationaryMask ^= ch0Mask | ch1Mask;
-	uint64_t leftMask = ch0Mask;
-	uint64_t rightMask = ch1Mask;
+	uint64_t leftMask = 1ULL << ch0;
+	uint64_t rightMask = 1ULL << ch1;
 
 	if (symmetric && ch0 + ch1 != n - 1)
 	{
-		uint8_t ch0Sym = n - 1 - ch1;
-		uint8_t ch1Sym = n - 1 - ch0;
-		ch0Mask = 1ULL << ch0Sym;
-		ch1Mask = 1ULL << ch1Sym;
-		stationaryMask ^= ch0Mask | ch1Mask;
-		leftMask |= ch0Mask;
-		rightMask |= ch1Mask;
+		leftMask |= 1ULL << (n - 1 - ch1);
+		rightMask |= 1ULL << (n - 1 - ch0);
 	}
+
+	uint8_t shift = ch1 - ch0;
+	uint64_t stationaryMask = ~(leftMask | rightMask);
 
 	return { stationaryMask, leftMask, rightMask, shift };
 }
@@ -94,23 +80,23 @@ uint64_t WindowMinimizer::Bitswap(uint64_t x, const BitswapMask& mask)
 	return ret;
 }
 
-// Distinct random pair in [0, max]
+// Distinct random pair in [0, max)
 static inline std::pair<uint8_t, uint8_t> RandomPair(uint8_t max)
 {
 	static std::mt19937_64 gen{ std::random_device{}() };
-	std::uniform_int_distribution<uint32_t> aDist{ 0, max };
-	std::uniform_int_distribution<uint32_t> bDist{ 0, max - 1U };
+	std::uniform_int_distribution<uint32_t> aDist{ 0, max - 1U };
+	std::uniform_int_distribution<uint32_t> bDist{ 0, max - 2U };
 
 	uint8_t a = (uint8_t)aDist(gen);
 	uint8_t b = (uint8_t)bDist(gen);
 
-	return { a, (b == a) ? max : b };
+	return { a, (b == a) ? max - 1U : b };
 }
 
 WindowMinimizer::Permutation WindowMinimizer::RandomSwap(const Permutation& perm)
 {
 	// Generate random channels to swap
-	auto [ch0, ch1] = RandomPair(n - 1);
+	auto [ch0, ch1] = RandomPair(n);
 
 	// Swap those channels in the permutation
 	Permutation ret{ perm };

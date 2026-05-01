@@ -11,3 +11,10 @@ void PrintNetwork(const Network& network)
 	}
 	std::println();
 }
+
+Network Append(const Network& a, const Network& b)
+{
+	Network ret{ a };
+	ret.insert(ret.end(), b.begin(), b.end());
+	return ret;
+}
