@@ -13,6 +13,7 @@ Var Expression2::NextVar()
 
 void Expression2::AddClause(const Clause& clause)
 {
+#if 0
 	Clause sorted{ clause };
 	std::sort(sorted.begin(), sorted.end());
 
@@ -20,8 +21,17 @@ void Expression2::AddClause(const Clause& clause)
 		bool jdfhj = true;
 	else clauseSet.insert(sorted);
 
+	std::erase_if(sorted, [](Literal l) { return std::abs(l) <= 2; });
+
+	std::unordered_set<Var> usedVars;
+	for (Literal l : sorted)
+		usedVars.insert(std::abs(l));
+	if (usedVars.size() != sorted.size())
+		bool djhd = true;
+
 	if (clause.size() == 1)
 		bool dfjhj = true;
+#endif
 
 	clauses.push_back(clause);
 }
@@ -38,7 +48,7 @@ void Expression2::AddEquals(Literal v, const Clause& clause)
 		AddClause({ v, -lit });
 }
 
-void Expression2::SaveToFile(const std::string& filepath)
+void Expression2::SaveToFile(const std::string& filepath) const
 {
 	Serializer serializer{ filepath };
 	serializer.Serialize(*this);

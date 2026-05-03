@@ -35,15 +35,15 @@ protected:
 
 	void CreateTrueFalse();
 	void InitializeVariables();
+	bool ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1) const;
 	void AddValid();
-	void AddOnce(uint8_t k, uint8_t i);
 	void AddUsedDefinitions();
 	void AddUpDownDefinitions();
 	void AddOneDownDefinition(uint8_t k, uint8_t i, uint8_t j);
 	void AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j);
 	void AddInput(size_t inputIdx);
 
-	void AddPhi1(uint8_t l);
+	void AddPhi1();
 	void AddPhi2();
 	void AddPhi3();
 	void AddPhi4();
@@ -54,6 +54,6 @@ protected:
 	void AddPsi3a();
 	void AddPsi3b();
 
-	uint64_t LeadingZeros(uint64_t input);
-	uint64_t TailingOnes(uint64_t input);
+	uint64_t LeadingZeros(uint64_t input) const;
+	uint64_t TailingOnes(uint64_t input) const;
 };

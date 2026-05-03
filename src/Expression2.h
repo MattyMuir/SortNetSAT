@@ -33,7 +33,7 @@ public:
     void AddClause(const Clause& clause);
     void AddEquals(Literal v, const Clause& clause);
 
-    void SaveToFile(const std::string& filepath);
+    void SaveToFile(const std::string& filepath) const;
     void SanityCheck() const;
 
 protected:

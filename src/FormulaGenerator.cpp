@@ -21,7 +21,7 @@ Expression2 FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	for (size_t i = 0; i < inputs.size(); i++)
 		AddInput(i);
 
-	AddPhi1(d - 1);
+	AddPhi1();
 	AddPhi2();
 	AddPhi3();
 	AddPhi4();
@@ -100,38 +100,61 @@ void FormulaGenerator::InitializeVariables()
 	}
 }
 
+bool FormulaGenerator::ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1) const
+{
+	bool shares = i0 == i1
+		|| j0 == i1
+		|| j0 == j1;
+
+	if (!symmetric) return shares;
+
+	uint8_t i0Sym = n - 1 - j0;
+	uint8_t j0Sym = n - 1 - i0;
+	bool sharesSym = i0Sym == i1
+		|| i0Sym == j1
+		|| j0Sym == j1;
+
+	return shares || sharesSym;
+}
+
 void FormulaGenerator::AddValid()
 {
 	for (uint8_t k = 0; k < d; k++)
-		for (uint8_t i = 0; i < n; i++)
-			AddOnce(k, i);
-}
-
-void FormulaGenerator::AddOnce(uint8_t k, uint8_t i)
-{
-	for (uint8_t j = 0; j < n; j++)
 	{
-		if (j == i) continue;
-		for (uint8_t l = j + 1; l < n; l++)
+		// Loop over all comparators (i0, j0)
+		for (uint8_t i0 = 0; i0 < n - 1U; i0++)
 		{
-			if (l == i) continue;
-			
-			uint8_t lo0 = std::min(i, j);
-			uint8_t hi0 = std::max(i, j);
-			if (symmetric && lo0 > n - 1 - hi0) continue;
+			for (uint8_t j0 = i0 + 1; j0 < n; j0++)
+			{
+				// Comparator (i0, j0) must be lexicographically leq to its reflection
+				if (symmetric && i0 > n - 1 - j0) continue;
 
-			Var first = comps(k, std::min(i, j), std::max(i, j));
-			Var second = comps(k, std::min(i, l), std::max(i, l));
-			expr.AddClause({ -first, -second });
+				// Loop over all comparators (i1, j1)
+				for (uint8_t i1 = 0; i1 < n - 1U; i1++)
+				{
+					for (uint8_t j1 = i1 + 1; j1 < n; j1++)
+					{
+						// Comparator (i1, j1) must be lexicographically leq to its reflection
+						if (symmetric && i1 > n - 1 - j1) continue;
+						// Comparator (i0, j0) must be lexicographically < (i1, j1)
+						if (i1 < i0 || (i1 == i0 && j1 <= j0)) continue;
+
+						if (ShareChannel(i0, j0, i1, j1))
+							expr.AddClause({ -comps(k, i0, j0), -comps(k, i1, j1) });
+					}
+				}
+			}
 		}
 	}
 }
 
 void FormulaGenerator::AddUsedDefinitions()
 {
+	uint8_t numChannels = symmetric ? n / 2 : n;
+
 	for (uint8_t k = 0; k < d; k++)
 	{
-		for (uint8_t i = 0; i < n; i++)
+		for (uint8_t i = 0; i < numChannels; i++)
 		{
 			Clause def;
 			for (uint8_t j = 0; j < i; j++)		def.push_back(comps(k, j, i));
@@ -179,8 +202,35 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 	uint64_t leadingZeros = LeadingZeros(inputWord);
 	uint64_t tailingOnes = TailingOnes(inputWord);
 
+	// Special case for first-layer outputs
+	for (uint8_t i = leadingZeros; i < (n - tailingOnes); i++)
+	{
+		bool val = inputWord & (1ULL << i);
+
+		if (val)
+		{
+			// Value will only be affected by zeros in higher indices
+			Clause affectingComps;
+			for (uint8_t j = i + 1; j < (n - tailingOnes); j++)
+				if (~inputWord & (1ULL << j))
+					affectingComps.push_back(comps(0, i, j));
+
+			expr.AddEquals(-v(inputIdx, 1, i), affectingComps);
+		}
+		else
+		{
+			// Value will only be affected by ones in lower indices
+			Clause affectingComps;
+			for (uint8_t j = leadingZeros; j < i; j++)
+				if (inputWord & (1ULL << j))
+					affectingComps.push_back(comps(0, j, i));
+
+			expr.AddEquals(v(inputIdx, 1, i), affectingComps);
+		}
+	}
+
 	// Ensure that intermediate layer results are updated according to the comparators
-	for (uint8_t k = 1; k <= d; k++)
+	for (uint8_t k = 2; k <= d; k++)
 	{
 		for (uint8_t i = leadingZeros; i < (n - tailingOnes); i++)
 		{
@@ -215,33 +265,26 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 	}
 }
 
-void FormulaGenerator::AddPhi1(uint8_t l)
+void FormulaGenerator::AddPhi1()
 {
 	for (uint8_t i = 0; i < n - 2; i++)
-	{
 		for (uint8_t j = i + 2; j < n; j++)
-		{
-			Clause clause{ -comps(l, i, j) };
-			for (uint8_t k = l + 1; k < d; k++)
-			{
-				clause.push_back(used(k, i));
-				clause.push_back(used(k, j));
-			}
-			expr.AddClause(clause);
-		}
-	}
+			if (!symmetric || i <= n - 1 - j)
+				expr.AddClause({ -comps(d - 1, i, j) });
 }
 
 void FormulaGenerator::AddPhi2()
 {
 	for (uint8_t i = 0; i < n - 4; i++)
 		for (uint8_t j = i + 4; j < n; j++)
-			expr.AddClause({ -comps(d - 2, i, j) });
+			if (!symmetric || i <= n - 1 - j)
+				expr.AddClause({ -comps(d - 2, i, j) });
 }
 
 void FormulaGenerator::AddPhi3()
 {
-	for (uint8_t i = 0; i < n - 3; i++)
+	uint8_t numChannels = symmetric ? n / 2 - 1 : n - 3;
+	for (uint8_t i = 0; i < numChannels; i++)
 	{
 		expr.AddClause({
 			-comps(d - 2, i, i + 3),
@@ -257,7 +300,8 @@ void FormulaGenerator::AddPhi3()
 
 void FormulaGenerator::AddPhi4()
 {
-	for (uint8_t i = 0; i < n - 2; i++)
+	uint8_t numChannels = symmetric ? n / 2 - 1 : n - 2;
+	for (uint8_t i = 0; i < numChannels; i++)
 	{
 		expr.AddClause({
 			-comps(d - 2, i, i + 2),
@@ -271,10 +315,13 @@ void FormulaGenerator::AddPsi1()
 {
 	for (uint8_t i = 0; i < n - 1; i++)
 	{
-		expr.AddClause({
-			used(d - 1, i),
-			used(d - 1, i + 1),
-			});
+		if (symmetric && i == n / 2 - 1)
+			expr.AddClause({ used(d - 1, i) });
+		else
+			expr.AddClause({
+				used(d - 1, i),
+				used(d - 1, i + 1),
+				});
 	}
 }
 
@@ -378,12 +425,12 @@ void FormulaGenerator::AddPsi3b()
 	}
 }
 
-uint64_t FormulaGenerator::LeadingZeros(uint64_t input)
+uint64_t FormulaGenerator::LeadingZeros(uint64_t input) const
 {
 	return std::min<uint64_t>(n, std::countr_zero(input));
 }
 
-uint64_t FormulaGenerator::TailingOnes(uint64_t input)
+uint64_t FormulaGenerator::TailingOnes(uint64_t input) const
 {
 	return std::countl_one(input << (64 - n));
 }
