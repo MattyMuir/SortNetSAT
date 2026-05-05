@@ -10,7 +10,8 @@
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang.exe",
 				"CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang.exe",
-				"WARNINGS": "ON"
+				"WARNINGS": "ON",
+				"SNS_MSVC_STATIC_RUNTIME": "ON"
 			},
 			"condition": {
 				"type": "equals",

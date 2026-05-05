@@ -1,42 +1,44 @@
 #include "Expression.h"
 
-#include <fstream>
-#include <format>
 #include <print>
+#include <charconv>
+#include <format>
+#include <unordered_set>
+#include <algorithm>
 
-void Expression::SaveToFile(const std::string& filename)
+Var Expression::NextVar()
 {
-	std::ofstream file{ filename };
-	file << std::format("p cnf {} {}\n", nextVar - 1, clauses.size());
-
-	for (const auto& clause : clauses)
-	{
-		for (Literal l : clause) file << l << ' ';
-		file << "0\n";
-	}
-}
-
-Var Expression::CreateVar(const std::string & name)
-{
-	nameToVar[name] = nextVar;
-	varToName.emplace_back(name);
 	return nextVar++;
 }
 
-void Expression::AddClause(const std::vector<Literal>& clause)
+Var Expression::GetMaxVar() const
 {
-	clauses.emplace_back(clause);
+	return nextVar - 1;
 }
 
-void Expression::AddClauses(const std::vector<Clause>& newClauses)
+void Expression::AddClause(const Clause& clause)
 {
-	clauses.insert(clauses.end(), newClauses.begin(), newClauses.end());
-}
+#if 0
+	Clause sorted{ clause };
+	std::sort(sorted.begin(), sorted.end());
 
-void Expression::AddEquals(Literal a, Literal b)
-{
-	AddClause({ -a, b });
-	AddClause({ a, -b });
+	if (clauseSet.contains(sorted))
+		bool jdfhj = true;
+	else clauseSet.insert(sorted);
+
+	std::erase_if(sorted, [](Literal l) { return std::abs(l) <= 2; });
+
+	std::unordered_set<Var> usedVars;
+	for (Literal l : sorted)
+		usedVars.insert(std::abs(l));
+	if (usedVars.size() != sorted.size())
+		bool djhd = true;
+
+	if (clause.size() == 1)
+		bool dfjhj = true;
+#endif
+
+	clauses.push_back(clause);
 }
 
 void Expression::AddEquals(Literal v, const Clause& clause)
@@ -51,90 +53,103 @@ void Expression::AddEquals(Literal v, const Clause& clause)
 		AddClause({ v, -lit });
 }
 
-void Expression::AddAImpliesBEqualCOrD(Literal a, Literal b, Literal c, Literal d)
+void Expression::SaveToFile(const std::string& filepath) const
 {
-	AddClause({ -a, b, -c });
-	AddClause({ -a, b, -d });
-	AddClause({ -a, -b, c, d });
-}
-
-void Expression::AddAImpliesBEqualCAndD(Literal a, Literal b, Literal c, Literal d)
-{
-	AddClause({ -a, -b, c });
-	AddClause({ -a, -b, d });
-	AddClause({ -a, b, -c, -d });
-}
-
-void Expression::AddAImpliesBEqualC(Literal a, Literal b, Literal c)
-{
-	AddClause({ -a, -b, c });
-	AddClause({ -a, b, -c });
-}
-
-Var Expression::GetVar(const std::string & name) const
-{
-	return nameToVar.at(name);
-}
-
-std::string Expression::GetName(Var var) const
-{
-	return varToName[var];
-}
-
-void Expression::PrettyPrint() const
-{
-	for (Var v = 1; v < nextVar; v++)
-		std::println("{}", varToName[v]);
-	std::println("=================");
-
-	for (const Clause& clause : clauses)
-		PrettyPrint(clause);
+	Serializer serializer{ filepath };
+	serializer.Serialize(*this);
 }
 
 void Expression::SanityCheck() const
 {
-	std::println("=== Duplicate Clauses ===");
+	// Duplicate clauses
+	size_t numDuplicate = 0;
 	std::unordered_set<Clause, ClauseHasher> allClauses;
 	for (const Clause& clause : clauses)
 	{
-		if (allClauses.contains(clause)) PrettyPrint(clause);
-		else allClauses.insert(clause);
+		Clause sorted{ clause };
+		std::sort(sorted.begin(), sorted.end());
+
+		if (allClauses.contains(sorted)) numDuplicate++;
+		else allClauses.insert(sorted);
 	}
 
-	std::println("=== Unused Variables  ===");
+	// Unused variables
 	std::vector<bool> isUsed(nextVar, false);
 	for (const Clause& clause : clauses)
 		for (Literal l : clause)
 			isUsed[std::abs(l)] = true;
+	size_t numUnused = 0;
 	for (Var v = 1; v < nextVar; v++)
 		if (!isUsed[v])
-			std::println("{}", LiteralToStr(v));
+			numUnused++;
 
-	std::println("=========================");
+	// Empty clauses
 	size_t numEmpty = 0;
 	for (const Clause& clause : clauses)
 		numEmpty += clause.empty();
-	std::println("Num empty: {}", numEmpty);
 
+	// Unit clauses
 	size_t numUnit = 0;
 	for (const Clause& clause : clauses)
 		numUnit += (clause.size() == 1);
-	std::println("Num unit: {}", numUnit);
-}
 
-std::string Expression::LiteralToStr(Literal l) const
-{
-	std::string name = varToName[std::abs(l)];
-	if (l < 0) name = "!" + name;
-	return name;
-}
-
-void Expression::PrettyPrint(const Clause& clause) const
-{
-	for (size_t li = 0; li < clause.size(); li++)
+	// Clauses with duplicate literals
+	size_t numDuplicateLiteral = 0;
+	for (const Clause& clause : clauses)
 	{
-		if (li) std::print(" or ");
-		std::print("{}", LiteralToStr(clause[li]));
+		std::unordered_set<Var> vars;
+		for (Literal l : clause) vars.insert(std::abs(l));
+
+		numDuplicateLiteral += (vars.size() != clause.size());
 	}
-	std::println();
+
+	std::println("True clauses  : {}", allClauses.size());
+	std::println("Num duplicate : {}", numDuplicate);
+	std::println("Num unused    : {}", numUnused);
+	std::println("Num empty     : {}", numEmpty);
+	std::println("Num unit      : {}", numUnit);
+	std::println("Num dup lit   : {}", numDuplicateLiteral);
+}
+
+Expression::Serializer::Serializer(const std::string& filepath)
+	: file(filepath) {}
+
+void Expression::Serializer::Serialize(const Expression& expr)
+{
+	file << std::format("p cnf {} {}\n", expr.nextVar - 1, expr.clauses.size());
+
+	for (const Clause& clause : expr.clauses)
+		WriteClause(clause);
+
+	if (writeIdx) FlushBuffer();
+}
+
+void Expression::Serializer::WriteInt(int64_t x)
+{
+	if (writeIdx + 20 >= BufSize) FlushBuffer();
+	auto [ptr, _] = std::to_chars(buf + writeIdx, buf + BufSize, x);
+	writeIdx = ptr - buf;
+}
+
+void Expression::Serializer::WriteChar(char c)
+{
+	if (writeIdx == BufSize) FlushBuffer();
+	buf[writeIdx++] = c;
+}
+
+void Expression::Serializer::WriteClause(const Clause& clause)
+{
+	for (size_t i = 0; i < clause.size(); i++)
+	{
+		WriteInt(clause[i]);
+		WriteChar(' ');
+	}
+	WriteChar('0');
+	WriteChar('\n');
+}
+
+void Expression::Serializer::FlushBuffer()
+{
+	file.write(buf, writeIdx);
+	writeIdx = 0;
 }

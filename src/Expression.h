@@ -1,39 +1,44 @@
 #pragma once
 #include <string>
-#include <array>
-#include <unordered_map>
-#include <unordered_set>
+#include <fstream>
+#include <unordered_set> // TODO remove
 
 #include "clause.h"
 
 class Expression
 {
+protected:
+    class Serializer
+    {
+    public:
+        Serializer(const std::string& filepath);
+
+        void Serialize(const Expression& expr);
+
+    protected:
+        std::ofstream file;
+
+        static constexpr size_t BufSize = 512;
+        char buf[BufSize];
+        size_t writeIdx = 0;
+
+        void WriteInt(int64_t x);
+        void WriteChar(char c);
+        void WriteClause(const Clause& clause);
+        void FlushBuffer();
+    };
+
 public:
-    void SaveToFile(const std::string& filename);
-    Var CreateVar(const std::string& name);
-
-    // Clause creation
+    Var NextVar();
+    Var GetMaxVar() const;
     void AddClause(const Clause& clause);
-    void AddClauses(const std::vector<Clause>& newClauses);
-    void AddEquals(Literal a, Literal b);
-    void AddEquals(Literal v, const Clause& clause); // v = (clause)
-    void AddAImpliesBEqualCOrD(Literal a, Literal b, Literal c, Literal d); // a -> (b = (c or d))
-    void AddAImpliesBEqualCAndD(Literal a, Literal b, Literal c, Literal d); // a -> (b = (c and d))
-    void AddAImpliesBEqualC(Literal a, Literal b, Literal c); // a -> (b = c)
+    void AddEquals(Literal v, const Clause& clause);
 
-    Var GetVar(const std::string& name) const;
-    std::string GetName(Var var) const;
-
-    void PrettyPrint() const;
+    void SaveToFile(const std::string& filepath) const;
     void SanityCheck() const;
 
 protected:
     Var nextVar = 1;
-    std::unordered_map<std::string, Var> nameToVar;
-    std::vector<std::string> varToName = { "INVALID" };
-
     std::vector<Clause> clauses;
-
-    std::string LiteralToStr(Literal l) const;
-    void PrettyPrint(const Clause& clause) const;
+    std::unordered_set<Clause, ClauseHasher> clauseSet; // TODO remove
 };

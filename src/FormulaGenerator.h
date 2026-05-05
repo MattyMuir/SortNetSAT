@@ -2,7 +2,7 @@
 #include <cstdint>
 
 #include "Network.h"
-#include "Expression2.h"
+#include "Expression.h"
 
 class VariableFamily
 {
@@ -22,14 +22,15 @@ class FormulaGenerator
 public:
 	FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_);
 
-	Expression2 Generate(const std::vector<uint64_t>& inputs_);
+	Expression Generate(const std::vector<uint64_t>& inputs_);
+	Network ParseAssignment(const std::vector<bool>& assignment);
 
 protected:
 	uint8_t n, d;
 	bool symmetric;
 	std::vector<uint64_t> inputs;
 
-	Expression2 expr;
+	Expression expr;
 	Var trueVar, falseVar;
 	VariableFamily comps, used, oneDown, oneUp, v;
 

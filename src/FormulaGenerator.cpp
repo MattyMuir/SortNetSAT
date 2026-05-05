@@ -9,7 +9,7 @@ FormulaGenerator::FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 	oneDown(d, n, n),
 	oneUp(d, n, n) {}
 
-Expression2 FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
+Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 {
 	inputs = inputs_;
 
@@ -33,6 +33,19 @@ Expression2 FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	AddPsi3b();
 
 	return expr;
+}
+
+Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment)
+{
+	Network network;
+	for (uint8_t k = 0; k < d; k++)
+	{
+		for (uint8_t i = 0; i < n - 1; i++)
+			for (uint8_t j = i + 1; j < n; j++)
+				if (assignment[comps(k, i, j)])
+					network.push_back({ i, j });
+	}
+	return network;
 }
 
 void FormulaGenerator::CreateTrueFalse()
@@ -291,10 +304,11 @@ void FormulaGenerator::AddPhi3()
 			comps(d - 1, i, i + 1)
 			});
 
-		expr.AddClause({
-			-comps(d - 2, i, i + 3),
-			comps(d - 1, i + 2, i + 3)
-			});
+		if (i < numChannels - 1)
+			expr.AddClause({
+				-comps(d - 2, i, i + 3),
+				comps(d - 1, i + 2, i + 3)
+				});
 	}
 }
 
@@ -313,21 +327,23 @@ void FormulaGenerator::AddPhi4()
 
 void FormulaGenerator::AddPsi1()
 {
-	for (uint8_t i = 0; i < n - 1; i++)
+	uint8_t numChannels = symmetric ? n / 2 - 1 : n - 1;
+	for (uint8_t i = 0; i < numChannels; i++)
 	{
-		if (symmetric && i == n / 2 - 1)
-			expr.AddClause({ used(d - 1, i) });
-		else
-			expr.AddClause({
-				used(d - 1, i),
-				used(d - 1, i + 1),
-				});
+		expr.AddClause({
+			used(d - 1, i),
+			used(d - 1, i + 1),
+			});
 	}
+
+	if (symmetric)
+		expr.AddClause({ used(d - 1, n / 2 - 1) });
 }
 
 void FormulaGenerator::AddPsi2a()
 {
-	for (uint8_t i = 0; i < n - 3; i++)
+	uint8_t numChannels = symmetric ? n / 2 - 1 : n - 3;
+	for (uint8_t i = 0; i < numChannels; i++)
 	{
 		expr.AddClause({
 			-comps(d - 1, i, i + 1),
