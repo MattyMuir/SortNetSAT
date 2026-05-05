@@ -30,9 +30,11 @@ protected:
 
 public:
     Var NextVar();
-    Var GetMaxVar() const;
     void AddClause(const Clause& clause);
     void AddEquals(Literal v, const Clause& clause);
+
+    Var GetMaxVar() const;
+    const std::vector<Clause>& GetClauses() const;
 
     void SaveToFile(const std::string& filepath) const;
     void SanityCheck() const;

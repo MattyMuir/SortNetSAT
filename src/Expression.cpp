@@ -11,11 +11,6 @@ Var Expression::NextVar()
 	return nextVar++;
 }
 
-Var Expression::GetMaxVar() const
-{
-	return nextVar - 1;
-}
-
 void Expression::AddClause(const Clause& clause)
 {
 #if 0
@@ -51,6 +46,16 @@ void Expression::AddEquals(Literal v, const Clause& clause)
 	// Add (!v -> !clause[0]) and (!v -> !clause[1]) and ...
 	for (Literal lit : clause)
 		AddClause({ v, -lit });
+}
+
+Var Expression::GetMaxVar() const
+{
+	return nextVar - 1;
+}
+
+const std::vector<Clause>& Expression::GetClauses() const
+{
+	return clauses;
 }
 
 void Expression::SaveToFile(const std::string& filepath) const

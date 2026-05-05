@@ -17,11 +17,10 @@ std::optional<Network> ExtendPrefix(uint8_t n, uint8_t d, const Network& prefix,
 	// Build CNF formula
 	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
-	expr.SaveToFile("tmp.cnf");
 
 	// Solve formula
 	KissatSolver solver;
-	solver.LoadDimacs("tmp.cnf");
+	solver.LoadExpression(expr.GetMaxVar(), expr.GetClauses());
 	KissatSolver::Result res = solver.Solve();
 	if (res != KissatSolver::Satisfiable) return std::nullopt;
 
@@ -41,17 +40,12 @@ std::optional<Network> ExtendPrefix(uint8_t n, uint8_t d, const Network& prefix,
 int main()
 {
 	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 10;
+	uint8_t n = 10;
+	uint8_t d = 7;
 	bool symmetric = true;
 
-	Network prefix = { {
-			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
-			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16},
-			{1,13},{2,7},{4,16},{6,9},{8,11},{10,15},
-			{0,1},{2,3},{4,12},{5,13},{7,9},{8,10},{14,15},{16,17}
-		} };
-	uint8_t prefixDepth = 4;
+	Network prefix = PrefixPar(n);
+	uint8_t prefixDepth = 1;
 	// ==================
 
 	auto network = ExtendPrefix(n, d, prefix, prefixDepth, symmetric);
