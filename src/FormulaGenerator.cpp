@@ -73,13 +73,13 @@ void FormulaGenerator::InitializeVariables()
 			used(k, i) = (symmetric && i >= n / 2) ? used(k, n - 1 - i) : expr.NextVar();
 
 	// OneDown variables
-	for (uint8_t k = 0; k < d; k++)
+	for (uint8_t k = 1; k < d; k++)
 		for (uint8_t i = 0; i < n; i++)
 			for (uint8_t j = i; j < n; j++)
 				oneDown(k, i, j) = (i == j) ? falseVar : expr.NextVar();
 
 	// OneUp variables
-	for (uint8_t k = 0; k < d; k++)
+	for (uint8_t k = 1; k < d; k++)
 		for (uint8_t i = 0; i < n; i++)
 			for (uint8_t j = i; j < n; j++)
 				oneUp(k, i, j) = (symmetric || i == j) ? oneDown(k, n - 1 - j, n - 1 - i) : expr.NextVar();
@@ -179,7 +179,7 @@ void FormulaGenerator::AddUsedDefinitions()
 
 void FormulaGenerator::AddUpDownDefinitions()
 {
-	for (uint8_t k = 0; k < d; k++)
+	for (uint8_t k = 1; k < d; k++)
 	{
 		for (uint8_t i = 0; i < n; i++)
 		{
