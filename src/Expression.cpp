@@ -48,6 +48,11 @@ void Expression::AddEquals(Literal v, const Clause& clause)
 		AddClause({ v, -lit });
 }
 
+void Expression::AddComment(const std::string& comment)
+{
+	comments.push_back(comment);
+}
+
 Var Expression::NumVars() const
 {
 	return nextVar - 1;
@@ -121,6 +126,9 @@ Expression::Serializer::Serializer(const std::string& filepath)
 
 void Expression::Serializer::Serialize(const Expression& expr)
 {
+	for (const std::string& comment : expr.comments)
+		file << comment << '\n';
+
 	file << std::format("p cnf {} {}\n", expr.nextVar - 1, expr.clauses.size());
 
 	for (const Clause& clause : expr.clauses)

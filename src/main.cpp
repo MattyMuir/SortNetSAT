@@ -66,11 +66,13 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	// Optimize prefix
 	WindowMinimizer minimizer{ n, symmetric };
 	Network prefixOpt = minimizer.Optimize(prefix, 300, 300);
+	PrintNetwork(prefixOpt);
 	auto prefixOutputs = PrefixOutputs(n, prefixOpt, true, symmetric);
 
 	// Build CNF formula
 	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
+	expr.SaveToFile("wang.cnf");
 
 	// Load expression into solver
 	Minisat::Solver solver;
@@ -81,9 +83,21 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	if (!solver.simplify())
 		return std::nullopt;
 
+	// Failed literal check
+	bool fCheckDone = false;
+	while (!fCheckDone)
+	{
+		int freeBefore = solver.nFreeVars();
+		std::println("Free: {}", freeBefore);
+		solver.failedLiteralCheck();
+		fCheckDone = solver.nFreeVars() == freeBefore;
+	}
+	std::println("Free: {}", solver.nFreeVars());
+
 	// Solve
 	Minisat::vec<Minisat::Lit> dummy;
 	Minisat::lbool ret = solver.solveLimited(dummy);
+	solver.printStats();
 	if (ret != Minisat::l_True) return std::nullopt;
 
 	// Convert witness to postfix
@@ -101,15 +115,18 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 int main()
 {
 	// === Parameters ===
-	uint8_t n = 17;
-	uint8_t d = 10;
-	bool symmetric = false;
+	uint8_t n = 28;
+	uint8_t d = 13;
+	bool symmetric = true;
 	Network prefix = {{
-			{1,2},{3,4},{5,6},{7,8},{9,10},{11,12},{13,14},{15,16},
-			{1,3},{2,4},{5,7},{6,8},{9,11},{10,12},{13,15},{14,16},
-			{1,5},{2,6},{3,7},{4,8},{9,13},{10,14},{11,15},{12,16}
+			{0,27},{1,26},{2,25},{3,24},{4,23},{5,22},{6,21},{7,20},{8,9},{10,11},{12,15},{13,14},{16,17},{18,19},
+			{0,1},{2,3},{4,5},{6,7},{8,10},{9,11},{12,14},{13,15},{16,18},{17,19},{20,21},{22,23},{24,25},{26,27},
+			{0,2},{1,3},{4,6},{5,7},{8,19},{9,12},{10,14},{11,16},{13,17},{15,18},{20,22},{21,23},{24,26},{25,27},
+			{0,4},{1,5},{2,20},{3,21},{6,24},{7,25},{8,13},{9,11},{10,17},{12,15},{14,19},{16,18},{22,26},{23,27},
+			{1,2},{3,24},{4,6},{5,22},{7,20},{8,9},{10,12},{11,13},{14,16},{15,17},{18,19},{21,23},{25,26},
+			{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
 		}};
-	uint8_t prefixDepth = 3;
+	uint8_t prefixDepth = 6;
 	// ==================
 
 	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, prefixDepth, symmetric);

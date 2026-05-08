@@ -11,6 +11,7 @@ public:
 	VariableFamily(size_t xWidth, size_t yWidth = 1, size_t zWidth = 1);
 
 	Var& operator()(size_t x, size_t y = 0, size_t z = 0);
+	const Var& operator()(size_t x, size_t y = 0, size_t z = 0) const;
 
 protected:
 	size_t yStride, zStride;
@@ -24,6 +25,7 @@ public:
 
 	Expression Generate(const std::vector<uint64_t>& inputs_);
 	Network ParseAssignment(const std::vector<bool>& assignment);
+	std::vector<Var> GetSamplingVariables() const;
 
 protected:
 	uint8_t n, d;
@@ -54,6 +56,8 @@ protected:
 	void AddPsi2c();
 	void AddPsi3a();
 	void AddPsi3b();
+
+	void AddSamplingComment();
 
 	uint64_t LeadingZeros(uint64_t input) const;
 	uint64_t TailingOnes(uint64_t input) const;

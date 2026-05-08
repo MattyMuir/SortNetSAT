@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <fstream>
+#include <string>
 #include <unordered_set> // TODO remove
 
 #include "clause.h"
@@ -32,6 +33,7 @@ public:
     Var NextVar();
     void AddClause(const Clause& clause);
     void AddEquals(Literal v, const Clause& clause);
+    void AddComment(const std::string& comment);
 
     Var NumVars() const;
     const std::vector<Clause>& GetClauses() const;
@@ -42,5 +44,6 @@ public:
 protected:
     Var nextVar = 1;
     std::vector<Clause> clauses;
+    std::vector<std::string> comments;
     std::unordered_set<Clause, ClauseHasher> clauseSet; // TODO remove
 };

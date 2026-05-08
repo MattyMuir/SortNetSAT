@@ -31,6 +31,7 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 		std::advance(cutoff, populationSize);
 		globalPopulation.erase(cutoff, globalPopulation.end());
 	}
+	std::println();
 
 	Network optPrefix{ initialPrefix };
 	Permute(optPrefix, globalPopulation.begin()->second.perm);

@@ -1,6 +1,7 @@
 #include "FormulaGenerator.h"
 
 #include <bit>
+#include <sstream>
 
 FormulaGenerator::FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_),
@@ -32,6 +33,8 @@ Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	AddPsi3a();
 	AddPsi3b();
 
+	AddSamplingComment();
+
 	return expr;
 }
 
@@ -46,6 +49,18 @@ Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment)
 					network.push_back({ i, j });
 	}
 	return network;
+}
+
+std::vector<Var> FormulaGenerator::GetSamplingVariables() const
+{
+	std::vector<Var> sampling;
+	for (uint8_t k = 0; k < d; k++)
+		for (uint8_t i = 0; i + 1 < n; i++)
+			for (uint8_t j = i + 1; j < n; j++)
+				if (!symmetric || i <= n - 1 - j)
+					sampling.push_back(comps(k, i, j));
+
+	return sampling;
 }
 
 void FormulaGenerator::CreateTrueFalse()
@@ -441,6 +456,18 @@ void FormulaGenerator::AddPsi3b()
 	}
 }
 
+void FormulaGenerator::AddSamplingComment()
+{
+	std::stringstream ss;
+	ss << "c p show ";
+
+	std::vector<Var> sampleVars = GetSamplingVariables();
+	for (Var v : sampleVars) ss << v << ' ';
+	
+	ss << '0';
+	expr.AddComment(ss.str());
+}
+
 uint64_t FormulaGenerator::LeadingZeros(uint64_t input) const
 {
 	return std::min<uint64_t>(n, std::countr_zero(input));
@@ -455,6 +482,11 @@ VariableFamily::VariableFamily(size_t xWidth, size_t yWidth, size_t zWidth)
 	: yStride(xWidth), zStride(xWidth * yWidth), vars(xWidth * yWidth * zWidth) {}
 
 Var& VariableFamily::operator()(size_t x, size_t y, size_t z)
+{
+	return vars[z * zStride + y * yStride + x];
+}
+
+const Var& VariableFamily::operator()(size_t x, size_t y, size_t z) const
 {
 	return vars[z * zStride + y * yStride + x];
 }
