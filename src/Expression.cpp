@@ -48,7 +48,7 @@ void Expression::AddEquals(Literal v, const Clause& clause)
 		AddClause({ v, -lit });
 }
 
-Var Expression::GetMaxVar() const
+Var Expression::NumVars() const
 {
 	return nextVar - 1;
 }

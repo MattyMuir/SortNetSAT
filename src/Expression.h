@@ -33,7 +33,7 @@ public:
     void AddClause(const Clause& clause);
     void AddEquals(Literal v, const Clause& clause);
 
-    Var GetMaxVar() const;
+    Var NumVars() const;
     const std::vector<Clause>& GetClauses() const;
 
     void SaveToFile(const std::string& filepath) const;

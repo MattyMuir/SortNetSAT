@@ -7,6 +7,9 @@ add_executable(SortNetSAT "main.cpp"   "Timer.h"   "prefixes.h" "prefixes.cpp" "
 find_package(KissatLib REQUIRED)
 target_link_libraries(SortNetSAT PUBLIC KissatLib::KissatLib)
 
+find_package(minisat REQUIRED)
+target_link_libraries(SortNetSAT PUBLIC minisat::minisat)
+
 # === Feature Enables ===
 if (SNS_MSVC_STATIC_RUNTIME)
     set_property(TARGET SortNetSAT PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
