@@ -1,14 +1,13 @@
 #include "WindowMinimizer.h"
 
 #include <print>
-#include <random>
 #include <numeric>
 #include <set>
 
 #include "prefixes.h"
 
-WindowMinimizer::WindowMinimizer(uint8_t n_, bool symmetric_)
-	: n(n_), symmetric(symmetric_) {}
+WindowMinimizer::WindowMinimizer(uint8_t n_, bool symmetric_, std::mt19937_64::result_type seed)
+	: n(n_), symmetric(symmetric_), gen(seed) {}
 
 Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, size_t populationSize)
 {
@@ -82,9 +81,8 @@ uint64_t WindowMinimizer::Bitswap(uint64_t x, const BitswapMask& mask)
 }
 
 // Distinct random pair in [0, max)
-static inline std::pair<uint8_t, uint8_t> RandomPair(uint8_t max)
+std::pair<uint8_t, uint8_t> WindowMinimizer::RandomPair(uint8_t max)
 {
-	static std::mt19937_64 gen{ std::random_device{}() };
 	std::uniform_int_distribution<uint32_t> aDist{ 0, max - 1U };
 	std::uniform_int_distribution<uint32_t> bDist{ 0, max - 2U };
 
