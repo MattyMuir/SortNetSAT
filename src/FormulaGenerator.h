@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <unordered_map>
 
 #include "Network.h"
 #include "Expression.h"
@@ -35,9 +36,11 @@ protected:
 	Expression expr;
 	Var trueVar, falseVar;
 	VariableFamily comps, used, oneDown, oneUp, v;
+	std::unordered_map<Clause, Var, ClauseHasher> clauseVars;
 
 	void CreateTrueFalse();
 	void InitializeVariables();
+	void InitializeVVariables(size_t inputIdx);
 	bool ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1) const;
 	void AddValid();
 	void AddUsedDefinitions();
@@ -59,6 +62,7 @@ protected:
 
 	void AddSamplingComment();
 
+	Var GetClauseVar(const Clause& clause);
 	uint64_t LeadingZeros(uint64_t input) const;
 	uint64_t TailingOnes(uint64_t input) const;
 };

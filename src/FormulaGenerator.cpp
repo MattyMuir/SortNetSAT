@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <sstream>
+#include <algorithm>
 
 FormulaGenerator::FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_),
@@ -82,50 +83,34 @@ void FormulaGenerator::InitializeVariables()
 			for (uint8_t j = i + 1, iSym = n - 2 - i; j < n; j++, iSym--)
 				comps(k, i, j) = (symmetric && i > iSym) ? comps(k, iSym, jSym) : expr.NextVar();
 
-	// Used variables
-	for (uint8_t k = 0; k < d; k++)
-		for (uint8_t i = 0; i < n; i++)
-			used(k, i) = (symmetric && i >= n / 2) ? used(k, n - 1 - i) : expr.NextVar();
-
-	// OneDown variables
-	for (uint8_t k = 1; k < d; k++)
-		for (uint8_t i = 0; i < n; i++)
-			for (uint8_t j = i; j < n; j++)
-				oneDown(k, i, j) = (i == j) ? falseVar : expr.NextVar();
-
-	// OneUp variables
-	for (uint8_t k = 1; k < d; k++)
-		for (uint8_t i = 0; i < n; i++)
-			for (uint8_t j = i; j < n; j++)
-				oneUp(k, i, j) = (symmetric || i == j) ? oneDown(k, n - 1 - j, n - 1 - i) : expr.NextVar();
-
 	// V variables
 	v = VariableFamily{ inputs.size(), d + 1U, n };
 	for (size_t inputIdx = 0; inputIdx < inputs.size(); inputIdx++)
+		InitializeVVariables(inputIdx);
+}
+
+void FormulaGenerator::InitializeVVariables(size_t inputIdx)
+{
+	uint64_t input = inputs[inputIdx];
+	uint64_t leadingZeros = LeadingZeros(input);
+	uint64_t tailingOnes = TailingOnes(input);
+
+	// Intermediate layers
+	for (uint8_t k = 1; k < d; k++)
 	{
-		uint64_t input = inputs[inputIdx];
-		uint64_t leadingZeros = LeadingZeros(input);
-		uint64_t tailingOnes = TailingOnes(input);
-
-		// Ensure that the zero-th layer values equal the inputs
-		for (uint8_t i = 0; i < n; i++)
-			v(inputIdx, 0, i) = (input & (1ULL << i)) ? trueVar : falseVar;
-
-		for (uint8_t k = 1; k < d; k++)
-		{
-			for (uint8_t i = 0; i < leadingZeros; i++)
-				v(inputIdx, k, i) = falseVar;
+		for (uint8_t i = 0; i < leadingZeros; i++)
+			v(inputIdx, k, i) = falseVar;
+		if (k > 1)
 			for (uint8_t i = leadingZeros; i < n - tailingOnes; i++)
 				v(inputIdx, k, i) = expr.NextVar();
-			for (uint8_t i = n - tailingOnes; i < n; i++)
-				v(inputIdx, k, i) = trueVar;
-		}
-
-		// Ensure that the output layer is sorted
-		uint64_t numZeros = n - std::popcount(input);
-		for (uint8_t i = 0; i < n; i++)
-			v(inputIdx, d, i) = (i < numZeros) ? falseVar : trueVar;
+		for (uint8_t i = n - tailingOnes; i < n; i++)
+			v(inputIdx, k, i) = trueVar;
 	}
+
+	// Ensure that the output layer is sorted
+	uint64_t numZeros = n - std::popcount(input);
+	for (uint8_t i = 0; i < n; i++)
+		v(inputIdx, d, i) = (i < numZeros) ? falseVar : trueVar;
 }
 
 bool FormulaGenerator::ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1) const
@@ -178,16 +163,14 @@ void FormulaGenerator::AddValid()
 
 void FormulaGenerator::AddUsedDefinitions()
 {
-	uint8_t numChannels = symmetric ? n / 2 : n;
-
-	for (uint8_t k = 0; k < d; k++)
+	for (uint8_t k = d - 2; k < d; k++)
 	{
-		for (uint8_t i = 0; i < numChannels; i++)
+		for (uint8_t i = 0; i < n; i++)
 		{
 			Clause def;
 			for (uint8_t j = 0; j < i; j++)		def.push_back(comps(k, j, i));
 			for (uint8_t j = i + 1; j < n; j++)	def.push_back(comps(k, i, j));
-			expr.AddEquals(used(k, i), def);
+			used(k, i) = GetClauseVar(def);
 		}
 	}
 }
@@ -201,7 +184,7 @@ void FormulaGenerator::AddUpDownDefinitions()
 			for (uint8_t j = i + 1; j < n; j++)
 			{
 				AddOneDownDefinition(k, i, j);
-				if (!symmetric) AddOneUpDefinition(k, i, j);
+				AddOneUpDefinition(k, i, j);
 			}
 		}
 	}
@@ -212,7 +195,7 @@ void FormulaGenerator::AddOneDownDefinition(uint8_t k, uint8_t i, uint8_t j)
 	Clause def;
 	for (uint8_t l = i + 1; l <= j; l++)
 		def.push_back(comps(k, i, l));
-	expr.AddEquals(oneDown(k, i, j), def);
+	oneDown(k, i, j) = GetClauseVar(def);
 }
 
 void FormulaGenerator::AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j)
@@ -220,7 +203,7 @@ void FormulaGenerator::AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j)
 	Clause def;
 	for (uint8_t l = i; l < j; l++)
 		def.push_back(comps(k, l, j));
-	expr.AddEquals(oneUp(k, i, j), def);
+	oneUp(k, i, j) = GetClauseVar(def);
 }
 
 void FormulaGenerator::AddInput(size_t inputIdx)
@@ -243,7 +226,7 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 				if (~inputWord & (1ULL << j))
 					affectingComps.push_back(comps(0, i, j));
 
-			expr.AddEquals(-v(inputIdx, 1, i), affectingComps);
+			v(inputIdx, 1, i) = -GetClauseVar(affectingComps);
 		}
 		else
 		{
@@ -253,7 +236,7 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 				if (inputWord & (1ULL << j))
 					affectingComps.push_back(comps(0, j, i));
 
-			expr.AddEquals(v(inputIdx, 1, i), affectingComps);
+			v(inputIdx, 1, i) = GetClauseVar(affectingComps);
 		}
 	}
 
@@ -466,6 +449,22 @@ void FormulaGenerator::AddSamplingComment()
 	
 	ss << '0';
 	expr.AddComment(ss.str());
+}
+
+Var FormulaGenerator::GetClauseVar(const Clause& clause)
+{
+	Clause sorted{ clause };
+	std::sort(sorted.begin(), sorted.end());
+
+	auto [it, inserted] = clauseVars.try_emplace(sorted, 0);
+	if (inserted)
+	{
+		Var v = expr.NextVar();
+		it->second = v;
+		expr.AddEquals(v, clause);
+	}
+	
+	return it->second;
 }
 
 uint64_t FormulaGenerator::LeadingZeros(uint64_t input) const

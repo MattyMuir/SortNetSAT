@@ -13,26 +13,6 @@ Var Expression::NextVar()
 
 void Expression::AddClause(const Clause& clause)
 {
-#if 0
-	Clause sorted{ clause };
-	std::sort(sorted.begin(), sorted.end());
-
-	if (clauseSet.contains(sorted))
-		bool jdfhj = true;
-	else clauseSet.insert(sorted);
-
-	std::erase_if(sorted, [](Literal l) { return std::abs(l) <= 2; });
-
-	std::unordered_set<Var> usedVars;
-	for (Literal l : sorted)
-		usedVars.insert(std::abs(l));
-	if (usedVars.size() != sorted.size())
-		bool djhd = true;
-
-	if (clause.size() == 1)
-		bool dfjhj = true;
-#endif
-
 	clauses.push_back(clause);
 }
 
@@ -113,12 +93,12 @@ void Expression::SanityCheck() const
 		numDuplicateLiteral += (vars.size() != clause.size());
 	}
 
-	std::println("True clauses  : {}", allClauses.size());
-	std::println("Num duplicate : {}", numDuplicate);
-	std::println("Num unused    : {}", numUnused);
-	std::println("Num empty     : {}", numEmpty);
-	std::println("Num unit      : {}", numUnit);
-	std::println("Num dup lit   : {}", numDuplicateLiteral);
+	std::println("True clauses   : {}", allClauses.size());
+	std::println("Num duplicate  : {}", numDuplicate);
+	std::println("Num unused     : {}", numUnused);
+	std::println("Num empty      : {}", numEmpty);
+	std::println("Num unit       : {}", numUnit);
+	std::println("Num dup lit    : {}", numDuplicateLiteral);
 }
 
 Expression::Serializer::Serializer(const std::string& filepath)

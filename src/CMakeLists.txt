@@ -4,8 +4,8 @@
 add_executable(SortNetSAT "main.cpp"   "Timer.h"   "prefixes.h" "prefixes.cpp" "Network.h" "Network.cpp" "WindowMinimizer.h" "WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp")
 
 # === Libraries ===
-find_package(KissatLib REQUIRED)
-target_link_libraries(SortNetSAT PUBLIC KissatLib::KissatLib)
+find_package(kissat REQUIRED)
+target_link_libraries(SortNetSAT PUBLIC kissat::kissat)
 
 find_package(minisat REQUIRED)
 target_link_libraries(SortNetSAT PUBLIC minisat::minisat)

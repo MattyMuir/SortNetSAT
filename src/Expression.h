@@ -1,8 +1,6 @@
 #pragma once
 #include <string>
 #include <fstream>
-#include <string>
-#include <unordered_set> // TODO remove
 
 #include "clause.h"
 
@@ -45,5 +43,4 @@ protected:
     Var nextVar = 1;
     std::vector<Clause> clauses;
     std::vector<std::string> comments;
-    std::unordered_set<Clause, ClauseHasher> clauseSet; // TODO remove
 };
