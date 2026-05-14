@@ -89,7 +89,7 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
 	//expr.SanityCheck();
-	//expr.SaveToFile("wangnew.cnf");
+	expr.SaveToFile("net18.cnf");
 
 	// Load expression into solver
 	Minisat::Solver solver;
@@ -141,7 +141,7 @@ int main()
 	// ==================
 
 	std::vector<double> times;
-	for (size_t f = 2; f <= 70; f += 2)
+	for (size_t f = 2; f <= 82; f += 2)
 	{
 		outputFraction = f / 100.0;
 		std::println("Starting {}", outputFraction);
@@ -169,31 +169,31 @@ int main()
 	auto prefixOutputs = PrefixOutputs(n, prefixOpt, true, symmetric);
 	uint64_t totalWindowWidth = WindowWidth(n, prefixOutputs, symmetric);
 
-	std::set<uint64_t> belowOne, aboveZero;
+	size_t savings = 0;
+	size_t s2 = 0;
 	for (uint64_t input : prefixOutputs)
 	{
 		uint8_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(input));
 		uint8_t tailingOnes = std::countl_one(input << (64 - n));
 
+		if (n - leadingZeros - tailingOnes == 2) s2++;
+
+		size_t numZeros = 0, numOnes = 0;
 		for (uint8_t i = leadingZeros; i < (n - tailingOnes); i++)
-		{
-			bool val = input & (1ULL << i);
-
-			if (val)
-				belowOne.insert(input >> (i + 1));
+			if (input & (1ULL << i))
+				numOnes++;
 			else
-				aboveZero.insert(input & ((1ULL << i) - 1));
+				numZeros++;
 
-		}
+		if (numZeros == 1 || numOnes == 1) savings++;
 	}
 
-	std::println("Window width: {}", totalWindowWidth);
-	size_t optimizedVarNum = belowOne.size() + aboveZero.size();
-	std::println("Optimized vars: {}", optimizedVarNum);
-	std::println("Reduction: {:.2f}x", (double)totalWindowWidth / optimizedVarNum);
+	std::println("Num outputs: {}", prefixOutputs.size());
+	std::println("Savings: {}", savings);
+	std::println("S2: {}", s2);
 #endif
 
-#if 0
+#if 1
 	// === Parameters ===
 	uint8_t n = 18;
 	uint8_t d = 10;

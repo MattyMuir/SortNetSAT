@@ -33,6 +33,7 @@ Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	AddPsi2c();
 	AddPsi3a();
 	AddPsi3b();
+	//EveryAdjacentComparator();
 
 	AddSamplingComment();
 
@@ -83,6 +84,11 @@ void FormulaGenerator::InitializeVariables()
 			for (uint8_t j = i + 1, iSym = n - 2 - i; j < n; j++, iSym--)
 				comps(k, i, j) = (symmetric && i > iSym) ? comps(k, iSym, jSym) : expr.NextVar();
 
+	// OneUpDown variables
+	for (uint8_t k = 1; k < d; k++)
+		for (uint8_t i = 0; i < n; i++)
+			oneDown(k, i, i) = oneUp(k, i, i) = falseVar;
+
 	// V variables
 	v = VariableFamily{ inputs.size(), d + 1U, n };
 	for (size_t inputIdx = 0; inputIdx < inputs.size(); inputIdx++)
@@ -94,38 +100,64 @@ void FormulaGenerator::InitializeVVariables(size_t inputIdx)
 	uint64_t input = inputs[inputIdx];
 	uint64_t leadingZeros = LeadingZeros(input);
 	uint64_t tailingOnes = TailingOnes(input);
+	uint64_t numZeros = n - std::popcount(input);
 
-	// Intermediate layers
-	for (uint8_t k = 1; k < d; k++)
+	// Leading zeros and tailing ones
+	for (uint8_t k = 0; k <= d; k++)
 	{
 		for (uint8_t i = 0; i < leadingZeros; i++)
 			v(inputIdx, k, i) = falseVar;
-		if (k > 1)
-			for (uint8_t i = leadingZeros; i < n - tailingOnes; i++)
-				v(inputIdx, k, i) = expr.NextVar();
 		for (uint8_t i = n - tailingOnes; i < n; i++)
 			v(inputIdx, k, i) = trueVar;
 	}
 
+	// Intermediate layers
+	for (uint8_t k = 2; k < d - 2; k++)
+		for (uint8_t i = leadingZeros; i < n - tailingOnes; i++)
+			v(inputIdx, k, i) = expr.NextVar();
+
+	// Antepenultimate layer
+	for (uint8_t i = leadingZeros; i < n - tailingOnes; i++)
+	{
+		if (i < numZeros && numZeros - i >= 5)
+			v(inputIdx, d - 2, i) = falseVar;
+		else if (i > numZeros && i - numZeros >= 4)
+			v(inputIdx, d - 2, i) = trueVar;
+		else
+			v(inputIdx, d - 2, i) = expr.NextVar();
+	}
+
+	// Since the last layer only contains comparators of height 1,
+	// bits in the penultimate set of values can only 'move' by 1 space.
+	// Any bits which are more than 1 away from the 0 -> 1 transition
+	// must already be correct.
+	for (uint8_t i = 0; i < numZeros - 1; i++)
+		v(inputIdx, d - 1, i) = falseVar;
+	v(inputIdx, d - 1, numZeros - 1) = expr.NextVar();
+	v(inputIdx, d - 1, numZeros) = expr.NextVar();
+	for (uint8_t i = numZeros + 1; i < n; i++)
+		v(inputIdx, d - 1, i) = trueVar;
+
 	// Ensure that the output layer is sorted
-	uint64_t numZeros = n - std::popcount(input);
 	for (uint8_t i = 0; i < n; i++)
 		v(inputIdx, d, i) = (i < numZeros) ? falseVar : trueVar;
 }
 
 bool FormulaGenerator::ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1) const
 {
-	bool shares = i0 == i1
-		|| j0 == i1
-		|| j0 == j1;
+	bool shares =  i0 == i1
+				|| i0 == j1
+				|| j0 == i1
+				|| j0 == j1;
 
 	if (!symmetric) return shares;
 
 	uint8_t i0Sym = n - 1 - j0;
 	uint8_t j0Sym = n - 1 - i0;
-	bool sharesSym = i0Sym == i1
-		|| i0Sym == j1
-		|| j0Sym == j1;
+	bool sharesSym =   i0Sym == i1
+					|| i0Sym == j1
+					|| j0Sym == i1
+					|| j0Sym == j1;
 
 	return shares || sharesSym;
 }
@@ -212,6 +244,7 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 
 	uint64_t leadingZeros = LeadingZeros(inputWord);
 	uint64_t tailingOnes = TailingOnes(inputWord);
+	uint64_t numZeros = n - std::popcount(inputWord);
 
 	// Special case for first-layer outputs
 	for (uint8_t i = leadingZeros; i < (n - tailingOnes); i++)
@@ -241,7 +274,7 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 	}
 
 	// Ensure that intermediate layer results are updated according to the comparators
-	for (uint8_t k = 2; k <= d; k++)
+	for (uint8_t k = 2; k < d; k++)
 	{
 		for (uint8_t i = leadingZeros; i < (n - tailingOnes); i++)
 		{
@@ -274,6 +307,18 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 			}
 		}
 	}
+
+	// Special case for the penultimate set of values
+	// Only the two values on the 0 -> 1 transition are not-fixed
+	Var v0 = v(inputIdx, d - 1, numZeros - 1);
+	Var v1 = v(inputIdx, d - 1, numZeros);
+
+	// Exactly one of v0 and v1 must be a 1
+	expr.AddClause({ v0, v1 });
+	expr.AddClause({ -v0, -v1 });
+
+	// If they are out-of-order, a comparator must exist between them
+	expr.AddClause({ comps(d - 1, numZeros - 1, numZeros), -v0, v1 });
 }
 
 void FormulaGenerator::AddPhi1()
@@ -436,6 +481,23 @@ void FormulaGenerator::AddPsi3b()
 			used(d - 2, i),
 			used(d - 2, i + 1)
 			});
+	}
+}
+
+void FormulaGenerator::EveryAdjacentComparator()
+{
+	for (uint64_t input : inputs)
+	{
+		uint8_t leadingZeros = LeadingZeros(input);
+		uint8_t tailingOnes = TailingOnes(input);
+		uint8_t windowWidth = n - leadingZeros - tailingOnes;
+
+		if (windowWidth != 2) continue;
+
+		Clause clause;
+		for (uint8_t k = 0; k < d; k++)
+			clause.push_back(comps(k, leadingZeros, leadingZeros + 1));
+		expr.AddClause(clause);
 	}
 }
 
