@@ -28,6 +28,8 @@ public:
 	Network ParseAssignment(const std::vector<bool>& assignment);
 	std::vector<Var> GetSamplingVariables() const;
 
+	void LogVariableInfo(Var var);
+
 protected:
 	uint8_t n, d;
 	bool symmetric;

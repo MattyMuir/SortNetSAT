@@ -88,12 +88,13 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	// Build CNF formula
 	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
+	generator.LogVariableInfo(2685);
 	//expr.SanityCheck();
-	expr.SaveToFile("net18.cnf");
+	expr.SaveToFile("wang.cnf");
 
 	// Load expression into solver
 	Minisat::Solver solver;
-	solver.verbosity = 1;
+	solver.verbosity = 2;
 	LoadExpressionMinisat(solver, expr);
 
 	// Simplify
@@ -105,6 +106,8 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 #if 1
 	solver.failedLiteralCheck();
 #endif
+
+	solver.toDimacs("wangSimplified.cnf");
 
 	// Solve
 	Minisat::vec<Minisat::Lit> dummy;
@@ -193,16 +196,13 @@ int main()
 	std::println("S2: {}", s2);
 #endif
 
-#if 1
+#if 0
 	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 10;
+	uint8_t n = 8;
+	uint8_t d = 6;
 	bool symmetric = true;
-	Network prefix = { {
-			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
-			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
-		} };
-	uint8_t prefixDepth = 2;
+	Network prefix = {};
+	uint8_t prefixDepth = 0;
 	// ==================
 
 	outputFraction = 1.0;
@@ -211,7 +211,7 @@ int main()
 	else PrintNetwork(networkOpt.value());
 #endif
 
-#if 0
+#if 1
 	// === Parameters ===
 	uint8_t n = 28;
 	uint8_t d = 13;

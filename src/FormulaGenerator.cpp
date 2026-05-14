@@ -1,5 +1,6 @@
 #include "FormulaGenerator.h"
 
+#include <print>
 #include <bit>
 #include <sstream>
 #include <algorithm>
@@ -46,9 +47,18 @@ Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment)
 	for (uint8_t k = 0; k < d; k++)
 	{
 		for (uint8_t i = 0; i < n - 1; i++)
+		{
 			for (uint8_t j = i + 1; j < n; j++)
-				if (assignment[comps(k, i, j)])
+			{
+				Literal l = comps(k, i, j);
+				bool isNeg = l < 0;
+				Var v = std::abs(l);
+
+				if (assignment[v] ^ isNeg)
 					network.push_back({ i, j });
+			}
+				
+		}
 	}
 	return network;
 }
@@ -63,6 +73,95 @@ std::vector<Var> FormulaGenerator::GetSamplingVariables() const
 					sampling.push_back(comps(k, i, j));
 
 	return sampling;
+}
+
+void FormulaGenerator::LogVariableInfo(Var var)
+{
+	if (var == trueVar)
+	{
+		std::println("{} = True variable", var);
+		return;
+	}
+
+	if (var == falseVar)
+	{
+		std::println("{} = False variable", var);
+		return;
+	}
+
+	for (uint8_t k = 0; k < d; k++)
+	{
+		for (uint8_t i = 0; i + 1 < n; i++)
+		{
+			for (uint8_t j = i + 1; j < n; j++)
+			{
+				if (comps(k, i, j) != var) continue;
+				std::println("{} = g^{}_{},{}", var, k, i, j);
+				return;
+			}
+		}
+	}
+
+	for (uint8_t k = 0; k < d; k++)
+	{
+		for (uint8_t i = 0; i < n; i++)
+		{
+			if (used(k, i) != var) continue;
+			std::println("{} = used^{}_{}", var, k, i);
+			return;
+		}
+	}
+
+	for (uint8_t k = 0; k < d; k++)
+	{
+		for (uint8_t i = 0; i < n; i++)
+		{
+			if (used(k, i) != var) continue;
+			std::println("{} = used^{}_{}", var, k, i);
+			return;
+		}
+	}
+
+	for (uint8_t k = 1; k < d; k++)
+	{
+		for (uint8_t i = 0; i < n; i++)
+		{
+			for (uint8_t j = i; j < n; j++)
+			{
+				if (oneDown(k, i, j) == var)
+				{
+					std::println("{} = oneDown^{}_{},{}", var, k, i, j);
+					return;
+				}
+				if (oneUp(k, i, j) == var)
+				{
+					std::println("{} = oneUp^{}_{},{}", var, k, i, j);
+					return;
+				}
+			}
+		}
+	}
+
+	for (size_t inputIdx = 0; inputIdx < inputs.size(); inputIdx++)
+	{
+		for (uint8_t k = 0; k <= d; k++)
+		{
+			for (uint8_t i = 0; i < n; i++)
+			{
+				if (v(inputIdx, k, i) != var) continue;
+				std::println("{} = v^{}_{},{} : {:0>{}b}", var, k, inputIdx, i, inputs[inputIdx], n);
+				return;
+			}
+		}
+	}
+
+	for (const auto& [clause, cv] : clauseVars)
+	{
+		if (cv != var) continue;
+		std::println("{} = Clause var: {}", var, clause);
+	}
+
+	std::println("Unknown variable");
 }
 
 void FormulaGenerator::CreateTrueFalse()
