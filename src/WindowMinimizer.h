@@ -3,7 +3,7 @@
 #include <map>
 #include <random>
 
-#include "Network.h"
+#include <sortnetutils.h>
 
 class WindowMinimizer
 {

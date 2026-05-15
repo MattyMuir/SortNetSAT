@@ -1,7 +1,9 @@
 #include <print>
 #include <optional>
 #include <set>
+#include <array>
 
+#include <sortnetutils.h>
 #include <kissatlib.h>
 #include <minisat.h>
 
@@ -18,7 +20,7 @@ std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& p
 	// Optimize prefix
 	WindowMinimizer minimizer{ n, symmetric, 1234 };
 	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
-	auto prefixOutputs = PrefixOutputs(n, prefixOpt, true, symmetric);
+	auto prefixOutputs = GetOutputs(prefixOpt, n, true, symmetric);
 
 	size_t numOutputs = prefixOutputs.size();
 	prefixOutputs.resize(numOutputs * outputFraction);
@@ -47,8 +49,8 @@ std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& p
 	Network postfix = generator.ParseAssignment(assignment);
 
 	// Append postfix to prefix and untangle
-	Network network = Append(prefixOpt, postfix);
-	Untangle(n, network);
+	Network network = Concatenate(prefixOpt, postfix);
+	Untangle(network, n);
 	return network;
 }
 
@@ -79,8 +81,7 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	// Optimize prefix
 	WindowMinimizer minimizer{ n, symmetric, 1234 };
 	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
-	PrintNetwork(prefixOpt);
-	auto prefixOutputs = PrefixOutputs(n, prefixOpt, true, symmetric);
+	auto prefixOutputs = GetOutputs(prefixOpt, n, true, symmetric);
 
 	size_t numOutputs = prefixOutputs.size();
 	prefixOutputs.resize(numOutputs * outputFraction);
@@ -88,13 +89,12 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	// Build CNF formula
 	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
-	generator.LogVariableInfo(2685);
 	//expr.SanityCheck();
-	expr.SaveToFile("wang.cnf");
+	expr.SaveToFile("net18.cnf");
 
 	// Load expression into solver
 	Minisat::Solver solver;
-	solver.verbosity = 2;
+	solver.verbosity = 1;
 	LoadExpressionMinisat(solver, expr);
 
 	// Simplify
@@ -103,11 +103,9 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 		return std::nullopt;
 
 	// Failed literal check
-#if 1
 	solver.failedLiteralCheck();
-#endif
 
-	solver.toDimacs("wangSimplified.cnf");
+	solver.toDimacs("net18Simplified.cnf");
 
 	// Solve
 	Minisat::vec<Minisat::Lit> dummy;
@@ -124,8 +122,8 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	Network postfix = generator.ParseAssignment(assignment);
 
 	// Append postfix to prefix and untangle
-	Network network = Append(prefixOpt, postfix);
-	Untangle(n, network);
+	Network network = Concatenate(prefixOpt, postfix);
+	Untangle(network, n);
 	return network;
 }
 
@@ -172,43 +170,37 @@ int main()
 	auto prefixOutputs = PrefixOutputs(n, prefixOpt, true, symmetric);
 	uint64_t totalWindowWidth = WindowWidth(n, prefixOutputs, symmetric);
 
-	size_t savings = 0;
-	size_t s2 = 0;
+
+	std::array<size_t, 18> widths{};
 	for (uint64_t input : prefixOutputs)
 	{
 		uint8_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(input));
 		uint8_t tailingOnes = std::countl_one(input << (64 - n));
+		uint8_t windowWidth = n - leadingZeros - tailingOnes;
 
-		if (n - leadingZeros - tailingOnes == 2) s2++;
-
-		size_t numZeros = 0, numOnes = 0;
-		for (uint8_t i = leadingZeros; i < (n - tailingOnes); i++)
-			if (input & (1ULL << i))
-				numOnes++;
-			else
-				numZeros++;
-
-		if (numZeros == 1 || numOnes == 1) savings++;
+		widths[windowWidth]++;
 	}
 
 	std::println("Num outputs: {}", prefixOutputs.size());
-	std::println("Savings: {}", savings);
-	std::println("S2: {}", s2);
+	std::println("Widths: {}", widths);
 #endif
 
 #if 0
 	// === Parameters ===
-	uint8_t n = 8;
-	uint8_t d = 6;
+	uint8_t n = 18;
+	uint8_t d = 10;
 	bool symmetric = true;
-	Network prefix = {};
-	uint8_t prefixDepth = 0;
+	Network prefix = { {
+			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
+			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
+		} };
+	uint8_t prefixDepth = 2;
 	// ==================
 
 	outputFraction = 1.0;
 	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, prefixDepth, symmetric);
 	if (!networkOpt.has_value()) std::println("Unextendable!");
-	else PrintNetwork(networkOpt.value());
+	else std::println("{}", networkOpt.value());
 #endif
 
 #if 1
@@ -230,6 +222,6 @@ int main()
 	outputFraction = 1.0;
 	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, prefixDepth, symmetric);
 	if (!networkOpt.has_value()) std::println("Unextendable!");
-	else PrintNetwork(networkOpt.value());
+	else std::println("{}", networkOpt.value());
 #endif
 }

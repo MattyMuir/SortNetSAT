@@ -2,7 +2,8 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "Network.h"
+#include <sortnetutils.h>
+
 #include "Expression.h"
 
 class VariableFamily
