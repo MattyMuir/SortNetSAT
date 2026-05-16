@@ -21,17 +21,20 @@ Network PrefixBZ(uint8_t n)
 	return prefix;
 }
 
+uint64_t WindowWidth(uint8_t n, uint64_t input)
+{
+	uint64_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(input));
+	uint64_t tailingOnes = std::countl_one(input << (64 - n));
+	return n - leadingZeros - tailingOnes;
+}
+
 uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs, bool symmetric)
 {
 	uint64_t windowWidth = 0;
 	for (uint64_t output : prefixOutputs)
-	{
-		if (symmetric && HasSmallerMirror(n, output)) continue;
+		if (!symmetric || !HasSmallerMirror(n, output))
+			windowWidth += WindowWidth(n, output);
 
-		uint64_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(output));
-		uint64_t tailingOnes = std::countl_one(output << (64 - n));
-		windowWidth += (n - leadingZeros - tailingOnes);
-	}
 	return windowWidth;
 }
 

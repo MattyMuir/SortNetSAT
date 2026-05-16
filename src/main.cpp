@@ -2,6 +2,9 @@
 #include <optional>
 #include <set>
 #include <array>
+#include <algorithm>
+#include <ranges>
+#include <random>
 
 #include <sortnetutils.h>
 #include <kissatlib.h>
@@ -15,7 +18,7 @@
 double outputFraction;
 double runtime;
 
-std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& prefix, uint8_t prefixDepth, bool symmetric)
+std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& prefix, bool symmetric)
 {
 	// Optimize prefix
 	WindowMinimizer minimizer{ n, symmetric, 1234 };
@@ -26,7 +29,7 @@ std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& p
 	prefixOutputs.resize(numOutputs * outputFraction);
 
 	// Build CNF formula
-	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
+	FormulaGenerator generator{ n, d - ComputeDepth(prefix), symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
 	expr.SaveToFile("issame.cnf");
 
@@ -76,43 +79,27 @@ void LoadExpressionMinisat(Minisat::Solver& solver, const Expression& expr)
 	}
 }
 
-std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& prefix, uint8_t prefixDepth, bool symmetric)
+std::optional<Network> DoExtendPrefixMinisat(uint8_t n, uint8_t d, const std::vector<uint64_t>& prefixOutputs, bool symmetric)
 {
-	// Optimize prefix
-	WindowMinimizer minimizer{ n, symmetric, 1234 };
-	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
-	auto prefixOutputs = GetOutputs(prefixOpt, n, true, symmetric);
-
-	size_t numOutputs = prefixOutputs.size();
-	prefixOutputs.resize(numOutputs * outputFraction);
-
 	// Build CNF formula
-	FormulaGenerator generator{ n, (uint8_t)(d - prefixDepth), symmetric };
+	FormulaGenerator generator{ n, d, symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
-	//expr.SanityCheck();
-	expr.SaveToFile("net18.cnf");
 
 	// Load expression into solver
 	Minisat::Solver solver;
-	solver.verbosity = 1;
+	solver.verbosity = 0;
 	LoadExpressionMinisat(solver, expr);
 
 	// Simplify
 	Timer t;
-	if (!solver.simplify())
-		return std::nullopt;
-
-	// Failed literal check
+	if (!solver.simplify()) return std::nullopt;
 	solver.failedLiteralCheck();
-
-	solver.toDimacs("net18Simplified.cnf");
 
 	// Solve
 	Minisat::vec<Minisat::Lit> dummy;
 	Minisat::lbool ret = solver.solveLimited(dummy);
 	t.Stop();
 	runtime = t.GetSeconds();
-	solver.printStats();
 	if (ret != Minisat::l_True) return std::nullopt;
 
 	// Convert witness to postfix
@@ -120,90 +107,66 @@ std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& 
 	for (int i = 0; i < solver.nVars(); i++)
 		assignment[i + 1] = (solver.model[i] == Minisat::l_True);
 	Network postfix = generator.ParseAssignment(assignment);
+	return postfix;
+}
+
+std::optional<Network> ExtendPrefixMinisat(uint8_t n, uint8_t d, const Network& prefix, bool symmetric)
+{
+	// Optimize prefix
+	WindowMinimizer minimizer{ n, symmetric, 1234 };
+	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
+	auto prefixOutputs = GetOutputs(prefixOpt, n, true, symmetric);
+
+	// Take a random fraction of the outputs
+	static std::mt19937_64 gen{ std::random_device{}() };
+	std::shuffle(prefixOutputs.begin(), prefixOutputs.end(), gen);
+	size_t numOutputs = prefixOutputs.size();
+	prefixOutputs.resize(numOutputs * outputFraction);
+
+	auto postfixOpt = DoExtendPrefixMinisat(n, d - ComputeDepth(prefix), prefixOutputs, symmetric);
+	if (!postfixOpt.has_value()) return std::nullopt;
 
 	// Append postfix to prefix and untangle
-	Network network = Concatenate(prefixOpt, postfix);
+	Network network = Concatenate(prefixOpt, postfixOpt.value());
 	Untangle(network, n);
 	return network;
 }
 
-int main()
+void FractionBenchmark()
 {
-#if 0
 	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 10;
+	uint8_t n = 16;
+	uint8_t d = 9;
 	bool symmetric = true;
-	Network prefix = {{
-			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
-			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
-		}};
-	uint8_t prefixDepth = 2;
+	Network prefix = { {
+			{0,5},{1,4},{2,12},{3,13},{6,7},{8,9},{10,15},{11,14},
+			{0,2},{1,10},{3,6},{4,7},{5,14},{8,11},{9,12},{13,15}
+		} };
 	// ==================
 
+	static constexpr size_t Repeats = 15;
+
 	std::vector<double> times;
-	for (size_t f = 2; f <= 82; f += 2)
+	for (size_t f = 1; f <= 20; f += 1)
 	{
 		outputFraction = f / 100.0;
 		std::println("Starting {}", outputFraction);
-		auto networkOpt = ExtendPrefixMinisat(n, d, prefix, prefixDepth, symmetric);
-		times.push_back(runtime);
+
+		double time = 0.0;
+		for (size_t i = 0; i < Repeats; i++)
+		{
+			auto networkOpt = ExtendPrefixMinisat(n, d, prefix, symmetric);
+			time += log(runtime);
+		}
+		times.push_back(time / Repeats);
 	}
 
-	std::println("{}", times);
-#endif
-#if 0
-	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 10;
-	bool symmetric = true;
-	Network prefix = { {
-			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
-			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
-		} };
-	uint8_t prefixDepth = 2;
-	// ==================
+	for (double t : times)
+		std::println("{}", t);
+}
 
-	// Optimize prefix
-	WindowMinimizer minimizer{ n, symmetric, 1234 };
-	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
-	auto prefixOutputs = PrefixOutputs(n, prefixOpt, true, symmetric);
-	uint64_t totalWindowWidth = WindowWidth(n, prefixOutputs, symmetric);
-
-
-	std::array<size_t, 18> widths{};
-	for (uint64_t input : prefixOutputs)
-	{
-		uint8_t leadingZeros = std::min<uint64_t>(n, std::countr_zero(input));
-		uint8_t tailingOnes = std::countl_one(input << (64 - n));
-		uint8_t windowWidth = n - leadingZeros - tailingOnes;
-
-		widths[windowWidth]++;
-	}
-
-	std::println("Num outputs: {}", prefixOutputs.size());
-	std::println("Widths: {}", widths);
-#endif
-
-#if 0
-	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 10;
-	bool symmetric = true;
-	Network prefix = { {
-			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
-			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
-		} };
-	uint8_t prefixDepth = 2;
-	// ==================
-
-	outputFraction = 1.0;
-	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, prefixDepth, symmetric);
-	if (!networkOpt.has_value()) std::println("Unextendable!");
-	else std::println("{}", networkOpt.value());
-#endif
-
-#if 1
+void Wang()
+{
 	// === Parameters ===
 	uint8_t n = 28;
 	uint8_t d = 13;
@@ -216,12 +179,130 @@ int main()
 			{1,2},{3,24},{4,6},{5,22},{7,20},{8,9},{10,12},{11,13},{14,16},{15,17},{18,19},{21,23},{25,26},
 			{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
 		} };
-	uint8_t prefixDepth = 6;
 	// ==================
 
 	outputFraction = 1.0;
-	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, prefixDepth, symmetric);
+	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, symmetric);
 	if (!networkOpt.has_value()) std::println("Unextendable!");
 	else std::println("{}", networkOpt.value());
-#endif
+}
+
+void Net18Full()
+{
+	// === Parameters ===
+	uint8_t n = 18;
+	uint8_t d = 10;
+	bool symmetric = true;
+	Network prefix = { {
+			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
+			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
+		} };
+	// ==================
+
+	outputFraction = 1.0;
+	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, symmetric);
+	if (!networkOpt.has_value()) std::println("Unextendable!");
+	else std::println("{}", networkOpt.value());
+}
+
+void Test()
+{
+	// === Parameters ===
+	uint8_t n = 16;
+	uint8_t d = 9;
+	bool symmetric = true;
+	Network prefix = { {
+			{0,5},{1,4},{2,12},{3,13},{6,7},{8,9},{10,15},{11,14},
+			{0,2},{1,10},{3,6},{4,7},{5,14},{8,11},{9,12},{13,15}
+		} };
+	// ==================
+
+	outputFraction = 1.0;
+	auto networkOpt = ExtendPrefixMinisat(n, d, prefix, symmetric);
+	if (!networkOpt.has_value()) std::println("Unextendable!");
+	else std::println("{}", networkOpt.value());
+}
+
+void IncrementalSolve()
+{
+	// === Parameters ===
+	uint8_t n = 18;
+	uint8_t d = 10;
+	bool symmetric = true;
+	Network prefix = { {
+			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
+			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
+		} };
+
+	size_t numInitial = 1;
+	size_t maxAddNum = 4;
+	// ==================
+
+	// Optimize prefix
+	WindowMinimizer minimizer{ n, symmetric, 1234 };
+	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
+	auto allOutputs = GetOutputs(prefixOpt, n, true, symmetric);
+	std::println("Total Outputs: {}", allOutputs.size());
+
+	// Sort outputs by window width
+	std::vector<std::pair<uint64_t, uint64_t>> scoredOutputs;
+	for (uint64_t output : allOutputs)
+		scoredOutputs.push_back({ output, WindowWidth(n, output) });
+	std::sort(scoredOutputs.begin(), scoredOutputs.end(), [](auto p1, auto p2) { return p1.second < p2.second; });
+
+	// Initialize test inputs
+	std::vector<uint64_t> testInputs;
+	for (size_t i = 0; i < numInitial; i++)
+		testInputs.push_back(scoredOutputs[i].first);
+	scoredOutputs.erase(scoredOutputs.begin(), scoredOutputs.begin() + numInitial);
+
+	for (;;)
+	{
+		auto postfixOpt = DoExtendPrefixMinisat(n, d - ComputeDepth(prefix), testInputs, symmetric);
+		if (!postfixOpt.has_value())
+		{
+			std::println("\nUNSAT");
+			break;
+		}
+
+		// Reconstruct network
+		Network network = Concatenate(prefixOpt, postfixOpt.value());
+		Untangle(network, n);
+
+		// Collect all failing inputs
+		std::vector<size_t> failing;
+		for (size_t i = 0; i < scoredOutputs.size(); i++)
+		{
+			uint64_t input = scoredOutputs[i].first;
+			uint64_t output = RunNetwork(network, input);
+			if (!IsSorted(n, output))
+				failing.push_back(i);
+		}
+
+		double passing = 1.0 - (double)failing.size() / allOutputs.size();
+		std::print("{} inputs  {:.3f}% passing\r", testInputs.size(), passing * 100.0);
+
+		if (failing.empty())
+		{
+			std::println("\nAll inputs pass!");
+			std::println("{:l}", network);
+			break;
+		}
+
+		// Add a subset of failing inputs
+		size_t numToAdd = std::min<size_t>(failing.size(), maxAddNum);
+		failing.resize(numToAdd);
+
+		for (size_t i : failing)
+			testInputs.push_back(scoredOutputs[i].first);
+
+		for (size_t i : failing | std::views::reverse)
+			scoredOutputs.erase(scoredOutputs.begin() + i);
+	}
+	std::println();
+}
+
+int main()
+{
+	
 }

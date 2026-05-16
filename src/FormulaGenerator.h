@@ -62,7 +62,6 @@ protected:
 	void AddPsi2c();
 	void AddPsi3a();
 	void AddPsi3b();
-	void EveryAdjacentComparator();
 
 	void AddSamplingComment();
 

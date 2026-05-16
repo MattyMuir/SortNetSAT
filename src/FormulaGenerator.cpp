@@ -34,7 +34,6 @@ Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	AddPsi2c();
 	AddPsi3a();
 	AddPsi3b();
-	//EveryAdjacentComparator();
 
 	AddSamplingComment();
 
@@ -580,23 +579,6 @@ void FormulaGenerator::AddPsi3b()
 			used(d - 2, i),
 			used(d - 2, i + 1)
 			});
-	}
-}
-
-void FormulaGenerator::EveryAdjacentComparator()
-{
-	for (uint64_t input : inputs)
-	{
-		uint8_t leadingZeros = LeadingZeros(input);
-		uint8_t tailingOnes = TailingOnes(input);
-		uint8_t windowWidth = n - leadingZeros - tailingOnes;
-
-		if (windowWidth != 2) continue;
-
-		Clause clause;
-		for (uint8_t k = 0; k < d; k++)
-			clause.push_back(comps(k, leadingZeros, leadingZeros + 1));
-		expr.AddClause(clause);
 	}
 }
 
