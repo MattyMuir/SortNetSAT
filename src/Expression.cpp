@@ -93,6 +93,8 @@ void Expression::SanityCheck() const
 		numDuplicateLiteral += (vars.size() != clause.size());
 	}
 
+	std::println("Variables:     : {}", nextVar - 1);
+	std::println("Clauses:       : {}", clauses.size());
 	std::println("True clauses   : {}", allClauses.size());
 	std::println("Num duplicate  : {}", numDuplicate);
 	std::println("Num unused     : {}", numUnused);

@@ -1,7 +1,8 @@
 # SortNetSAT TODO
 
 ## Working
-- Test best phi and psi combinations
+- If shuffled outputs are slow, are sorted outputs fast?
+- Fix/Ban sets of comparators, if UNSAT, add negation clause
 
 ## Complete
 - Optimize prefix output generation

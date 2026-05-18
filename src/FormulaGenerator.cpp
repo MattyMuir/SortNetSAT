@@ -12,9 +12,11 @@ FormulaGenerator::FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 	oneDown(d, n, n),
 	oneUp(d, n, n) {}
 
-Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
+Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_, const std::vector<CEd>& fixedComps_, const std::vector<CEd>& bannedComps_)
 {
 	inputs = inputs_;
+	fixedComps = fixedComps_;
+	bannedComps = bannedComps_;
 
 	InitializeVariables();
 	AddValid();
@@ -23,6 +25,8 @@ Expression FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 
 	for (size_t i = 0; i < inputs.size(); i++)
 		AddInput(i);
+
+	AddCompConstraints();
 
 	AddPhi1();
 	AddPhi2();
@@ -419,6 +423,12 @@ void FormulaGenerator::AddInput(size_t inputIdx)
 	expr.AddClause({ comps(d - 1, numZeros - 1, numZeros), -v0, v1 });
 }
 
+void FormulaGenerator::AddCompConstraints()
+{
+	for (auto [k, i, j] : fixedComps) expr.AddClause({ comps(k, i, j) });
+	for (auto [k, i, j] : bannedComps) expr.AddClause({ -comps(k, i, j) });
+}
+
 void FormulaGenerator::AddPhi1()
 {
 	for (uint8_t i = 0; i < n - 2; i++)
@@ -596,10 +606,22 @@ void FormulaGenerator::AddSamplingComment()
 
 Var FormulaGenerator::GetClauseVar(const Clause& clause)
 {
-	Clause sorted{ clause };
-	std::sort(sorted.begin(), sorted.end());
+	// Filter out fixed true/false variables
+	Clause sorted;
+	for (Literal l : clause)
+	{
+		if (l == trueVar || l == -falseVar) return trueVar;
+		if (l != falseVar && l != -trueVar) sorted.push_back(l);
+	}
 
+	// No need to create a new variable equal to a unit clause
+	if (sorted.size() == 1) return sorted[0];
+	
+	// Sort and insert the clause into the hash map
+	std::sort(sorted.begin(), sorted.end());
 	auto [it, inserted] = clauseVars.try_emplace(sorted, 0);
+
+	// If the clause is new, create a new variable for it
 	if (inserted)
 	{
 		Var v = expr.NextVar();

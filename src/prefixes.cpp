@@ -4,6 +4,7 @@
 #include <bit>
 #include <ranges>
 #include <fstream>
+#include <algorithm>
 
 Network PrefixPar(uint8_t n)
 {
@@ -36,6 +37,13 @@ uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs, bool
 			windowWidth += WindowWidth(n, output);
 
 	return windowWidth;
+}
+
+void SortByWindowWidth(uint8_t n, std::vector<uint64_t>& outputs)
+{
+	std::sort(outputs.begin(), outputs.end(), [n](uint64_t a, uint64_t b) {
+		return WindowWidth(n, a) < WindowWidth(n, b);
+		});
 }
 
 static inline bool ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1, uint8_t n, bool symmetric)

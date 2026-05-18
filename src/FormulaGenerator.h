@@ -6,6 +6,11 @@
 
 #include "Expression.h"
 
+struct CEd
+{
+	uint8_t l, lo, hi;
+};
+
 class VariableFamily
 {
 public:
@@ -25,7 +30,7 @@ class FormulaGenerator
 public:
 	FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_);
 
-	Expression Generate(const std::vector<uint64_t>& inputs_);
+	Expression Generate(const std::vector<uint64_t>& inputs_, const std::vector<CEd>& fixedComps_ = {}, const std::vector<CEd>& bannedComps_ = {});
 	Network ParseAssignment(const std::vector<bool>& assignment);
 	std::vector<Var> GetSamplingVariables() const;
 
@@ -35,6 +40,7 @@ protected:
 	uint8_t n, d;
 	bool symmetric;
 	std::vector<uint64_t> inputs;
+	std::vector<CEd> fixedComps, bannedComps;
 
 	Expression expr;
 	Var trueVar, falseVar;
@@ -51,6 +57,7 @@ protected:
 	void AddOneDownDefinition(uint8_t k, uint8_t i, uint8_t j);
 	void AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j);
 	void AddInput(size_t inputIdx);
+	void AddCompConstraints();
 
 	void AddPhi1();
 	void AddPhi2();
