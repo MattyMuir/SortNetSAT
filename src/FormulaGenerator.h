@@ -30,10 +30,12 @@ class FormulaGenerator
 public:
 	FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_);
 
-	Expression Generate(const std::vector<uint64_t>& inputs_, const std::vector<CEd>& fixedComps_ = {}, const std::vector<CEd>& bannedComps_ = {});
-	Network ParseAssignment(const std::vector<bool>& assignment);
-	std::vector<Var> GetSamplingVariables() const;
+	void Generate(const std::vector<uint64_t>& inputs_ = {}, const std::vector<CEd>& fixedComps_ = {}, const std::vector<CEd>& bannedComps_ = {});
+	void AddInput(uint64_t input);
+	void AddInputs(const std::vector<uint64_t>& inputs);
+	const Expression& GetExpression() const;
 
+	Network ParseAssignment(const std::vector<bool>& assignment);
 	void LogVariableInfo(Var var);
 
 protected:
@@ -44,19 +46,18 @@ protected:
 
 	Expression expr;
 	Var trueVar, falseVar;
-	VariableFamily comps, used, oneDown, oneUp, v;
+	VariableFamily comps, used, oneDown, oneUp;
 	std::unordered_map<Clause, Var, ClauseHasher> clauseVars;
 
 	void CreateTrueFalse();
 	void InitializeVariables();
-	void InitializeVVariables(size_t inputIdx);
+	void InitializeVVariables(VariableFamily& v, uint64_t input);
 	bool ShareChannel(uint8_t i0, uint8_t j0, uint8_t i1, uint8_t j1) const;
 	void AddValid();
 	void AddUsedDefinitions();
 	void AddUpDownDefinitions();
 	void AddOneDownDefinition(uint8_t k, uint8_t i, uint8_t j);
 	void AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j);
-	void AddInput(size_t inputIdx);
 	void AddCompConstraints();
 
 	void AddPhi1();
@@ -69,8 +70,6 @@ protected:
 	void AddPsi2c();
 	void AddPsi3a();
 	void AddPsi3b();
-
-	void AddSamplingComment();
 
 	Var GetClauseVar(const Clause& clause);
 	uint64_t LeadingZeros(uint64_t input) const;

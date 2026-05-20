@@ -34,6 +34,7 @@ public:
     void AddComment(const std::string& comment);
 
     Var NumVars() const;
+    size_t NumClauses() const;
     const std::vector<Clause>& GetClauses() const;
 
     void SaveToFile(const std::string& filepath) const;

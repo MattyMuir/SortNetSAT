@@ -38,6 +38,11 @@ Var Expression::NumVars() const
 	return nextVar - 1;
 }
 
+size_t Expression::NumClauses() const
+{
+	return clauses.size();
+}
+
 const std::vector<Clause>& Expression::GetClauses() const
 {
 	return clauses;

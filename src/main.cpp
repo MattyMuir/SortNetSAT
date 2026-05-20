@@ -31,7 +31,8 @@ std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& p
 
 	// Build CNF formula
 	FormulaGenerator generator{ n, (uint8_t)(d - ComputeDepth(prefix)), symmetric };
-	Expression expr = generator.Generate(prefixOutputs);
+	generator.Generate(prefixOutputs);
+	Expression expr = generator.GetExpression();
 	expr.SaveToFile("issame.cnf");
 
 	// Solve formula
@@ -58,33 +59,34 @@ std::optional<Network> ExtendPrefixKissat(uint8_t n, uint8_t d, const Network& p
 	return network;
 }
 
+Minisat::vec<Minisat::Lit> ConvertClause(const Clause& clause)
+{
+	Minisat::vec<Minisat::Lit> mClause;
+	for (Literal l : clause)
+	{
+		int var = std::abs(l) - 1;
+		mClause.push((l > 0) ? Minisat::mkLit(var) : ~Minisat::mkLit(var));
+	}
+	return mClause;
+}
+
 void LoadExpressionMinisat(Minisat::Solver& solver, const Expression& expr)
 {
 	// Initialize variables
 	for (int64_t i = 0; i < expr.NumVars(); i++)
 		solver.newVar();
 
-	const auto& clauses = expr.GetClauses();
-	for (const Clause& clause : clauses)
-	{
-		// Convert clause to minisat clause
-		Minisat::vec<Minisat::Lit> mClause;
-		for (Literal l : clause)
-		{
-			int var = std::abs(l) - 1;
-			mClause.push((l > 0) ? Minisat::mkLit(var) : ~Minisat::mkLit(var));
-		}
-
-		// Add clause to solver
-		solver.addClause(mClause);
-	}
+	// Add clauses
+	for (const Clause& clause : expr.GetClauses())
+		solver.addClause(ConvertClause(clause));
 }
 
 std::optional<Network> DoExtendPrefixMinisat(uint8_t n, uint8_t d, const std::vector<uint64_t>& prefixOutputs, bool symmetric)
 {
 	// Build CNF formula
 	FormulaGenerator generator{ n, d, symmetric };
-	Expression expr = generator.Generate(prefixOutputs);
+	generator.Generate(prefixOutputs);
+	Expression expr = generator.GetExpression();
 	//expr.SanityCheck();
 
 	// Load expression into solver
@@ -267,6 +269,7 @@ std::vector<size_t> ChooseNewTestors(const std::vector<uint64_t>& excludedInputs
 	for (auto [failingIdx, cost] : scoredFailing | std::views::take(maxAddNum))
 		newTestors.push_back(failingIdx);
 
+	std::sort(newTestors.begin(), newTestors.end());
 	return newTestors;
 #endif
 }
@@ -277,14 +280,12 @@ void IncrementalSolve()
 
 	// === Parameters ===
 	uint8_t n = 18;
-	uint8_t d = 10;
+	uint8_t d = 9;
 	bool symmetric = true;
 	Network prefix = { {
 			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
 			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
 		} };
-
-	size_t numInitial = 4;
 	size_t maxAddNum = 4;
 	// ==================
 
@@ -295,30 +296,43 @@ void IncrementalSolve()
 	size_t numOutputs = excludedInputs.size();
 	std::println("Total Outputs: {}", numOutputs);
 
-	// Sort outputs by window width
-	SortByWindowWidth(n, excludedInputs);
+	// Initialize formula generator
+	FormulaGenerator generator{ n, (uint8_t)(d - ComputeDepth(prefix)), symmetric };
+	const Expression& expr = generator.GetExpression();
+	generator.Generate();
 
-	// Initialize test inputs
-	std::vector<uint64_t> includedInputs{ excludedInputs.begin(), excludedInputs.begin() + numInitial};
-	excludedInputs.erase(excludedInputs.begin(), excludedInputs.begin() + numInitial);
-
+	// Run main incremental loop
+	std::vector<uint64_t> includedInputs;
 	for (;;)
 	{
-		// Build and solve the CNF formula
-		auto postfixOpt = DoExtendPrefixMinisat(n, d - ComputeDepth(prefix), includedInputs, symmetric);
-		if (!postfixOpt.has_value())
+		// Initialize solver
+		Minisat::Solver solver;
+		solver.verbosity = 0;
+		LoadExpressionMinisat(solver, expr);
+
+		// Solve the CNF formula
+		Minisat::vec<Minisat::Lit> dummy;
+		Minisat::lbool ret = solver.solveLimited(dummy);
+		if (ret != Minisat::l_True)
 		{
 			std::println("\nUNSAT");
 			log << "UNSAT\n";
 			break;
 		}
 
+		// Reconstruct the postfix
+		// Convert witness to postfix
+		std::vector<bool> assignment(expr.NumVars() + 1);
+		for (int i = 0; i < solver.nVars(); i++)
+			assignment[i + 1] = (solver.model[i] == Minisat::l_True);
+		Network postfix = generator.ParseAssignment(assignment);
+
 		// Collect all failing inputs
 		std::vector<size_t> failing;
 		for (size_t i = 0; i < excludedInputs.size(); i++)
 		{
 			uint64_t input = excludedInputs[i];
-			uint64_t output = RunNetwork(postfixOpt.value(), input);
+			uint64_t output = RunNetwork(postfix, input);
 			if (!IsSorted(n, output))
 				failing.push_back(i);
 		}
@@ -330,13 +344,13 @@ void IncrementalSolve()
 		log << std::flush;
 
 		// Check if all inputs were sorted
-		if (failing.empty())
+		if (failing.empty()/* || passing > 0.99*/)
 		{
 			std::println("\nAll inputs pass!");
 			log << std::format("All inputs pass!\n");
 
 			// Reconstruct network
-			Network network = Concatenate(prefixOpt, postfixOpt.value());
+			Network network = Concatenate(prefixOpt, postfix);
 			Untangle(network, n);
 			std::println("{:l}", network);
 			log << std::format("{:l}", network);
@@ -345,6 +359,120 @@ void IncrementalSolve()
 
 		// Choose a subet of failing inputs to include
 		auto newInputs = ChooseNewTestors(excludedInputs, includedInputs, failing, n, maxAddNum);
+
+		// Add all new inputs to the expression
+		for (size_t newInputIdx : newInputs)
+			generator.AddInput(excludedInputs[newInputIdx]);
+
+		// Include the new inputs and remove from excludedInputs
+		for (size_t i : newInputs)
+			includedInputs.push_back(excludedInputs[i]);
+		for (size_t i : newInputs | std::views::reverse)
+			excludedInputs.erase(excludedInputs.begin() + i);
+	}
+	std::println();
+}
+
+void IncrementalSolveV2()
+{
+	std::ofstream log{ "log.log" };
+
+	// === Parameters ===
+	uint8_t n = 28;
+	uint8_t d = 13;
+	bool symmetric = true;
+	Network prefix = { {
+			{0,27},{1,26},{2,25},{3,24},{4,23},{5,22},{6,21},{7,20},{8,9},{10,11},{12,15},{13,14},{16,17},{18,19},
+			{0,1},{2,3},{4,5},{6,7},{8,10},{9,11},{12,14},{13,15},{16,18},{17,19},{20,21},{22,23},{24,25},{26,27},
+			{0,2},{1,3},{4,6},{5,7},{8,19},{9,12},{10,14},{11,16},{13,17},{15,18},{20,22},{21,23},{24,26},{25,27},
+			{0,4},{1,5},{2,20},{3,21},{6,24},{7,25},{8,13},{9,11},{10,17},{12,15},{14,19},{16,18},{22,26},{23,27},
+			{1,2},{3,24},{4,6},{5,22},{7,20},{8,9},{10,12},{11,13},{14,16},{15,17},{18,19},{21,23},{25,26}
+		} };
+	size_t maxAddNum = 4;
+	// ==================
+
+	// Optimize prefix
+	WindowMinimizer minimizer{ n, symmetric, 1234 };
+	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
+	auto excludedInputs = GetOutputs(prefixOpt, n, true, symmetric);
+	size_t numOutputs = excludedInputs.size();
+	std::println("Total Outputs: {}", numOutputs);
+
+	// Initialize formula generator
+	FormulaGenerator generator{ n, (uint8_t)(d - ComputeDepth(prefix)), symmetric};
+	const Expression& expr = generator.GetExpression();
+	generator.Generate();
+
+	// Initialize solver
+	Minisat::Solver solver;
+	solver.verbosity = 0;
+	LoadExpressionMinisat(solver, expr);
+
+	// Run main incremental loop
+	std::vector<uint64_t> includedInputs;
+	for (;;)
+	{
+		// Solve the CNF formula
+		Minisat::vec<Minisat::Lit> dummy;
+		Minisat::lbool ret = solver.solveLimited(dummy);
+		if (ret != Minisat::l_True)
+		{
+			std::println("\nUNSAT");
+			log << "UNSAT\n";
+			break;
+		}
+
+		// Reconstruct the postfix
+		// Convert witness to postfix
+		std::vector<bool> assignment(expr.NumVars() + 1);
+		for (int i = 0; i < solver.nVars(); i++)
+			assignment[i + 1] = (solver.model[i] == Minisat::l_True);
+		Network postfix = generator.ParseAssignment(assignment);
+
+		// Collect all failing inputs
+		std::vector<size_t> failing;
+		for (size_t i = 0; i < excludedInputs.size(); i++)
+		{
+			uint64_t input = excludedInputs[i];
+			uint64_t output = RunNetwork(postfix, input);
+			if (!IsSorted(n, output))
+				failing.push_back(i);
+		}
+
+		// Log progress
+		double passing = 1.0 - (double)failing.size() / numOutputs;
+		std::print("{} inputs, width {}, {:.3f}% passing\r", includedInputs.size(), WindowWidth(n, includedInputs, symmetric), passing * 100.0);
+		log << std::format("{} inputs, width {}, {:.3f}% passing\n", includedInputs.size(), WindowWidth(n, includedInputs, symmetric), passing * 100.0);
+		log << std::flush;
+
+		// Check if all inputs were sorted
+		if (failing.empty()/* || passing > 0.99*/)
+		{
+			std::println("\nAll inputs pass!");
+			log << std::format("All inputs pass!\n");
+
+			// Reconstruct network
+			Network network = Concatenate(prefixOpt, postfix);
+			Untangle(network, n);
+			std::println("{:l}", network);
+			log << std::format("{:l}", network);
+			break;
+		}
+
+		// Choose a subet of failing inputs to include
+		auto newInputs = ChooseNewTestors(excludedInputs, includedInputs, failing, n, maxAddNum);
+
+		// Add all new inputs to the solver
+		size_t numClausesBefore = expr.NumClauses();
+		Var varsBefore = expr.NumVars();
+		for (size_t newInputIdx : newInputs)
+			generator.AddInput(excludedInputs[newInputIdx]);
+		size_t numVarsAdded = expr.NumVars() - varsBefore;
+		for (size_t i = 0; i < numVarsAdded; i++)
+			solver.newVar();
+		const auto& allClauses = expr.GetClauses();
+		for (size_t i = numClausesBefore; i < allClauses.size(); i++)
+			solver.addClause(ConvertClause(allClauses[i]));
 
 		// Include the new inputs and remove from excludedInputs
 		for (size_t i : newInputs)
@@ -391,7 +519,8 @@ void CompConstraintsTest()
 
 				// Build CNF formula
 				FormulaGenerator generator{ n, d, symmetric};
-				Expression expr = generator.Generate(prefixOutputs, { { { k, i, j } } });
+				generator.Generate(prefixOutputs, { { { k, i, j } } });
+				Expression expr = generator.GetExpression();
 
 				// Load expression into solver
 				Minisat::Solver solver;
@@ -417,5 +546,5 @@ void CompConstraintsTest()
 
 int main()
 {
-	IncrementalSolve();
+	IncrementalSolveV2();
 }
