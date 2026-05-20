@@ -85,11 +85,11 @@ std::optional<Network> DoExtendPrefixMinisat(uint8_t n, uint8_t d, const std::ve
 	// Build CNF formula
 	FormulaGenerator generator{ n, d, symmetric };
 	Expression expr = generator.Generate(prefixOutputs);
-	expr.SanityCheck();
+	//expr.SanityCheck();
 
 	// Load expression into solver
 	Minisat::Solver solver;
-	solver.verbosity = 1;
+	solver.verbosity = 0;
 	LoadExpressionMinisat(solver, expr);
 
 	// Simplify
@@ -225,6 +225,52 @@ void Test()
 	else std::println("{}", networkOpt.value());
 }
 
+uint64_t ComputeSimilarity(uint64_t input, const std::vector<uint64_t>& inputSet)
+{
+	uint64_t similarity = 0;
+	for (uint64_t other : inputSet)
+	{
+		uint64_t matching = ~(input ^ other);
+		similarity += std::popcount(matching);
+	}
+	return similarity;
+}
+
+std::vector<size_t> ChooseNewTestors(const std::vector<uint64_t>& excludedInputs, const std::vector<uint64_t>& includedInputs,
+	const std::vector<size_t>& failing, uint8_t n, size_t maxAddNum)
+{
+#if 0
+	std::vector<size_t> newTestors{ failing };
+	if (newTestors.size() > maxAddNum) newTestors.resize(maxAddNum);
+	return newTestors;
+#else
+	struct InputCost
+	{
+		uint64_t windowWidth, similarity;
+		auto operator<=>(const InputCost& other) const = default;
+	};
+
+	// Score all failing outputs
+	std::vector<std::pair<size_t, InputCost>> scoredFailing;
+	for (size_t failingIdx : failing)
+	{
+		uint64_t failingInput = excludedInputs[failingIdx];
+		uint64_t windowWidth = WindowWidth(n, failingInput);
+		uint64_t similarity = ComputeSimilarity(failingInput, includedInputs);
+		scoredFailing.emplace_back(failingIdx, InputCost{ windowWidth, similarity });
+	}
+
+	// Sort to find failing inputs with the lowest cost to add
+	std::sort(scoredFailing.begin(), scoredFailing.end(), [](auto a, auto b) { return a.second < b.second; });
+
+	std::vector<size_t> newTestors;
+	for (auto [failingIdx, cost] : scoredFailing | std::views::take(maxAddNum))
+		newTestors.push_back(failingIdx);
+
+	return newTestors;
+#endif
+}
+
 void IncrementalSolve()
 {
 	std::ofstream log{ "log.log" };
@@ -245,20 +291,21 @@ void IncrementalSolve()
 	// Optimize prefix
 	WindowMinimizer minimizer{ n, symmetric, 1234 };
 	Network prefixOpt = minimizer.Optimize(prefix, 128, 256);
-	auto prefixOutputs = GetOutputs(prefixOpt, n, true, symmetric);
-	size_t numOutputs = prefixOutputs.size();
+	auto excludedInputs = GetOutputs(prefixOpt, n, true, symmetric);
+	size_t numOutputs = excludedInputs.size();
 	std::println("Total Outputs: {}", numOutputs);
 
 	// Sort outputs by window width
-	SortByWindowWidth(n, prefixOutputs);
+	SortByWindowWidth(n, excludedInputs);
 
 	// Initialize test inputs
-	std::vector<uint64_t> testInputs{ prefixOutputs.begin(), prefixOutputs.begin() + numInitial};
-	prefixOutputs.erase(prefixOutputs.begin(), prefixOutputs.begin() + numInitial);
+	std::vector<uint64_t> includedInputs{ excludedInputs.begin(), excludedInputs.begin() + numInitial};
+	excludedInputs.erase(excludedInputs.begin(), excludedInputs.begin() + numInitial);
 
 	for (;;)
 	{
-		auto postfixOpt = DoExtendPrefixMinisat(n, d - ComputeDepth(prefix), testInputs, symmetric);
+		// Build and solve the CNF formula
+		auto postfixOpt = DoExtendPrefixMinisat(n, d - ComputeDepth(prefix), includedInputs, symmetric);
 		if (!postfixOpt.has_value())
 		{
 			std::println("\nUNSAT");
@@ -268,19 +315,21 @@ void IncrementalSolve()
 
 		// Collect all failing inputs
 		std::vector<size_t> failing;
-		for (size_t i = 0; i < prefixOutputs.size(); i++)
+		for (size_t i = 0; i < excludedInputs.size(); i++)
 		{
-			uint64_t input = prefixOutputs[i];
+			uint64_t input = excludedInputs[i];
 			uint64_t output = RunNetwork(postfixOpt.value(), input);
 			if (!IsSorted(n, output))
 				failing.push_back(i);
 		}
 
+		// Log progress
 		double passing = 1.0 - (double)failing.size() / numOutputs;
-		std::print("{} inputs  {:.3f}% passing\r", testInputs.size(), passing * 100.0);
-		log << std::format("{} inputs  {:.3f}% passing\n", testInputs.size(), passing * 100.0);
+		std::print("{} inputs, width {}, {:.3f}% passing\r", includedInputs.size(), WindowWidth(n, includedInputs, symmetric), passing * 100.0);
+		log << std::format("{} inputs, width {}, {:.3f}% passing\n", includedInputs.size(), WindowWidth(n, includedInputs, symmetric), passing * 100.0);
 		log << std::flush;
 
+		// Check if all inputs were sorted
 		if (failing.empty())
 		{
 			std::println("\nAll inputs pass!");
@@ -294,15 +343,14 @@ void IncrementalSolve()
 			break;
 		}
 
-		// Add a subset of failing inputs
-		size_t numToAdd = std::min<size_t>(failing.size(), maxAddNum);
-		failing.resize(numToAdd);
+		// Choose a subet of failing inputs to include
+		auto newInputs = ChooseNewTestors(excludedInputs, includedInputs, failing, n, maxAddNum);
 
-		for (size_t i : failing)
-			testInputs.push_back(prefixOutputs[i]);
-
-		for (size_t i : failing | std::views::reverse)
-			prefixOutputs.erase(prefixOutputs.begin() + i);
+		// Include the new inputs and remove from excludedInputs
+		for (size_t i : newInputs)
+			includedInputs.push_back(excludedInputs[i]);
+		for (size_t i : newInputs | std::views::reverse)
+			excludedInputs.erase(excludedInputs.begin() + i);
 	}
 	std::println();
 }
@@ -369,5 +417,5 @@ void CompConstraintsTest()
 
 int main()
 {
-	Net18Full();
+	IncrementalSolve();
 }
