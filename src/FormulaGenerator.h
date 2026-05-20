@@ -35,7 +35,7 @@ public:
 	void AddInputs(const std::vector<uint64_t>& inputs);
 	const Expression& GetExpression() const;
 
-	Network ParseAssignment(const std::vector<bool>& assignment);
+	Network ParseAssignment(const std::vector<bool>& assignment) const;
 	void LogVariableInfo(Var var);
 
 protected:

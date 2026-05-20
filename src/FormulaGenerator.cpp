@@ -47,7 +47,7 @@ const Expression& FormulaGenerator::GetExpression() const
 	return expr;
 }
 
-Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment)
+Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment) const
 {
 	Network network;
 	for (uint8_t k = 0; k < d; k++)

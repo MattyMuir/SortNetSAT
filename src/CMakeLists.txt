@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SortNetSAT
 
 # === Create Executable ===
-add_executable(SortNetSAT "main.cpp"   "Timer.h"   "prefixes.h" "prefixes.cpp"   "WindowMinimizer.h" "WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp")
+add_executable(SortNetSAT "main.cpp"   "Timer.h"   "prefixes.h" "prefixes.cpp"   "WindowMinimizer.h" "WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp" "SimpleExtender.h" "SimpleExtender.cpp" "Extender.h" "Extender.cpp" "minisatutil.h" "minisatutil.cpp" "IncrementalExtender.h" "IncrementalExtender.cpp")
 
 # === Libraries ===
 find_package(sortnetutils REQUIRED)
