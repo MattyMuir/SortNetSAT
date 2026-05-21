@@ -35,10 +35,11 @@ bool IncrementalExtender::Extend()
 		if (ret != Minisat::l_True) return false;
 
 		// Get the indices of all failing inputs
-		std::vector<size_t> failing = GetFailingInputs();
+		std::vector<FailingInput> failing = GetFailingInputs();
 		LogProgress(failing.size());
 
 		// Check if all inputs were sorted
+		if ((double)failing.size() / prefixOutputs.size() < 0.005) return true;
 		if (failing.empty()) return true;
 
 		// Choose a subet of failing inputs to include
@@ -47,7 +48,6 @@ bool IncrementalExtender::Extend()
 		// Add the new inputs to the solver and move from excluded -> included
 		IncludeNewInputs(newTestors);
 	}
-	std::println();
 }
 
 Network IncrementalExtender::GetNetwork() const
@@ -61,24 +61,25 @@ Network IncrementalExtender::GetNetwork() const
 
 Network IncrementalExtender::ReconstructPostfix() const
 {
-	std::vector<bool> assignment(solver.nVars());
+	std::vector<bool> assignment(solver.nVars() + 1);
 	for (int i = 0; i < solver.nVars(); i++)
 		assignment[i + 1] = (solver.model[i] == Minisat::l_True);
 	return generator.ParseAssignment(assignment);
 }
 
-std::vector<size_t> IncrementalExtender::GetFailingInputs() const
+std::vector<IncrementalExtender::FailingInput> IncrementalExtender::GetFailingInputs() const
 {
 	// Reconstruct the postfix
 	Network postfix = ReconstructPostfix();
 
 	// Collect all failing inputs
-	std::vector<size_t> failing;
+	std::vector<FailingInput> failing;
 	for (size_t i = 0; i < excludedInputs.size(); i++)
 	{
 		uint64_t input = excludedInputs[i];
 		uint64_t output = RunNetwork(postfix, input);
-		if (!IsSorted(n, output)) failing.push_back(i);
+		if (!IsSorted(n, output))
+			failing.push_back({ i, output });
 	}
 
 	return failing;
@@ -101,22 +102,31 @@ size_t IncrementalExtender::ComputeSimilarity(uint64_t input) const
 	return similarity;
 }
 
-std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<size_t>& failing) const
+uint64_t IncrementalExtender::CountInversions(uint64_t output) const
+{
+	uint64_t nextCh = output >> 1;
+	uint64_t inversionMask = output & ~nextCh;
+	inversionMask &= (1ULL << (n - 1)) - 1;
+	return std::popcount(inversionMask);
+}
+
+std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<FailingInput>& failing) const
 {
 	struct InputCost
 	{
-		uint64_t windowWidth, similarity;
+		uint64_t windowWidth, similarity, nonInverted;
 		auto operator<=>(const InputCost& other) const = default;
 	};
 
 	// Score all failing outputs based on window size and similarity
 	std::vector<std::pair<size_t, InputCost>> scoredFailing;
-	for (size_t failingIdx : failing)
+	for (auto [failingIdx, failingOutput] : failing)
 	{
 		uint64_t failingInput = excludedInputs[failingIdx];
 		uint64_t windowWidth = WindowWidth(n, failingInput);
 		uint64_t similarity = ComputeSimilarity(failingInput);
-		scoredFailing.emplace_back(failingIdx, InputCost{ windowWidth, similarity });
+		uint64_t nonInverted = n - CountInversions(failingOutput);
+		scoredFailing.emplace_back(failingIdx, InputCost{ windowWidth, similarity, nonInverted });
 	}
 
 	// Sort to find failing inputs with the lowest cost to add
