@@ -39,7 +39,6 @@ bool IncrementalExtender::Extend()
 		LogProgress(failing.size());
 
 		// Check if all inputs were sorted
-		if ((double)failing.size() / prefixOutputs.size() < 0.005) return true;
 		if (failing.empty()) return true;
 
 		// Choose a subet of failing inputs to include

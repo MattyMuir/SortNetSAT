@@ -7,6 +7,9 @@
 #include "prefixes.h"
 #include "SimpleExtender.h"
 #include "IncrementalExtender.h"
+#include "PrefixGenerator.h"
+#include "PrefixGeneratorV2.h"
+#include "LayerDAG.h"
 
 void FractionBenchmark()
 {
@@ -116,28 +119,30 @@ void GenerateCactusPlot()
 
 int main()
 {
-	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 7;
-	bool symmetric = true;
-	Network prefix{};
-	// ==================
+#if 1
+	uint8_t n = 8;
+	bool symmetric = false;
 
-	IncrementalExtender extender{ n, d, symmetric, prefix };
-	extender.SetParameters(6);
+	// Get prefix outputs
+	auto outputsVec = GetOutputs(PrefixPar(n), n);
+	std::unordered_set<uint64_t> outputs;
+	outputs.insert(outputsVec.begin(), outputsVec.end());
 
-	bool extendable = extender.Extend();
-	std::println();
-	std::ofstream out{ "result.log" };
-	if (!extendable)
-	{
-		std::println("Unextendable!");
-		out << "Unextendable!\n";
-	}
-	else
-	{
-		Network network = extender.GetNetwork();
-		std::println("{:l}", network);
-		out << std::format("{:l}", network);
-	}
+	// Construct layer DAG
+	LayerDAG layerDag{ n, symmetric };
+	std::println("Num layers: {}", layerDag.Size());
+
+	// Propagate outputs
+	std::println("Propagating outputs...");
+	layerDag.PropagateOutputs(outputs);
+
+	// Assign vertex properties
+	std::println("Assigning vertex properties...");
+	layerDag.FindRedundant();
+	layerDag.FindChildSubsets();
+
+	layerDag.SaveGraphviz("layerdag.gv");
+
+	std::println("Num saturated: {}", layerDag.GetSaturatedLayers().size());
+#endif
 }
