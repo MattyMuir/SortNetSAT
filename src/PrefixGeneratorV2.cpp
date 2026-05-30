@@ -3,6 +3,7 @@
 #include <print>
 #include <set>
 #include <iostream>
+#include <map>
 
 #include "NetworkGraph.h"
 #include "prefixes.h"
@@ -14,28 +15,26 @@ std::vector<Network> PrefixGeneratorV2::GeneratePrefixes()
 {
 	Prefix initialPrefix;
 	initialPrefix.push_back(PrefixPar(n));
-	R.push_back(initialPrefix);
+	allPrefixes.push_back(initialPrefix);
 	for (uint8_t k = 1; k < d; k++)
-	{
 		Generate();
-		Prune();
-	}
 
-	std::vector<Network> allPrefixes;
-	for (const Prefix& prefix : R)
+	std::vector<Network> ret;
+	for (const Prefix& prefix : allPrefixes)
 	{
 		Network network;
 		for (const Network& layer : prefix)
 			Append(network, layer);
-		allPrefixes.push_back(network);
+		ret.push_back(network);
 	}
-	return allPrefixes;
+	return ret;
 }
 
 void PrefixGeneratorV2::Generate()
 {
-	N.clear();
-	for (const Prefix& partialPrefix : R)
+	std::map<NetworkGraph, Prefix> nextAllPrefixes;
+
+	for (const Prefix& partialPrefix : allPrefixes)
 	{
 		// Get prefix outputs
 		Network prefixConcat;
@@ -50,24 +49,27 @@ void PrefixGeneratorV2::Generate()
 		layerDAG.FindRedundant();
 		layerDAG.FindChildSubsets();
 		auto saturatedLayers = layerDAG.GetSaturatedLayers();
+		auto unsaturatedLayers = layerDAG.GetUnsaturatedLayers();
 
 		for (const Network& layer : saturatedLayers)
 		{
 			Prefix newPrefix{ partialPrefix };
 			newPrefix.push_back(layer);
-			N.emplace_back(newPrefix);
+			nextAllPrefixes.emplace(NetworkGraph{ newPrefix, n }, newPrefix);
 		}
-	}
-}
 
-void PrefixGeneratorV2::Prune()
-{
-	R.clear();
-
-	std::set<NetworkGraph> graphs;
-	for (const Prefix& prefix : N)
-	{
-		auto [it, isNew] = graphs.emplace(prefix, n);
-		if (isNew) R.push_back(prefix);
+		/*
+		for (const Network& layer : unsaturatedLayers)
+		{
+			Prefix newPrefix{ partialPrefix };
+			newPrefix.push_back(layer);
+			nextAllPrefixes.erase(NetworkGraph{ newPrefix, n });
+		}
+		*/
 	}
+
+	allPrefixes.clear();
+
+	for (const auto& [graph, prefix] : nextAllPrefixes)
+		allPrefixes.push_back(prefix);
 }

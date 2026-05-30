@@ -19,13 +19,16 @@ protected:
 
 public:
 	LayerDAG(uint8_t n_, bool symmetric_);
+	LayerDAG(uint8_t n_, const std::vector<Network>& allLayers);
 	LayerDAG(const LayerDAG& other) = delete;
 	LayerDAG(LayerDAG&& other) = delete;
 	~LayerDAG();
 
 	size_t Size() const;
+	std::vector<Network> GetLayers() const;
 	std::vector<Network> GetRedundantLayers() const;
 	std::vector<Network> GetSaturatedLayers() const;
+	std::vector<Network> GetUnsaturatedLayers() const;
 
 	void PropagateOutputs(const std::unordered_set<uint64_t>& outputs);
 	void FindRedundant();

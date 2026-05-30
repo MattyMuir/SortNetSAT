@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SortNetSAT
 
 # === Create Executable ===
-add_executable(SortNetSAT "main.cpp"   "Timer.h"   "prefixes.h" "prefixes.cpp"   "WindowMinimizer.h" "WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp" "SimpleExtender.h" "SimpleExtender.cpp" "Extender.h" "Extender.cpp" "minisatutil.h" "minisatutil.cpp" "IncrementalExtender.h" "IncrementalExtender.cpp" "PrefixGenerator.h" "PrefixGenerator.cpp" "PrefixGeneratorV2.h" "PrefixGeneratorV2.cpp" "NetworkGraph.h" "NetworkGraph.cpp"   "LayerDAG.h" "LayerDAG.cpp")
+add_executable(SortNetSAT "main.cpp"   "Timer.h"   "prefixes.h" "prefixes.cpp"   "WindowMinimizer.h" "WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp" "SimpleExtender.h" "SimpleExtender.cpp" "Extender.h" "Extender.cpp" "minisatutil.h" "minisatutil.cpp" "IncrementalExtender.h" "IncrementalExtender.cpp" "PrefixGenerator.h" "PrefixGenerator.cpp" "PrefixGeneratorV2.h" "PrefixGeneratorV2.cpp" "NetworkGraph.h" "NetworkGraph.cpp"   "LayerDAG.h" "LayerDAG.cpp" "Pattern.h" "Pattern.cpp" "PrefixGraph.h" "PrefixGraph.cpp" "PrefixGeneratorV3.h" "PrefixGeneratorV3.cpp" "KosarajuSolver.h" "KosarajuSolver.cpp")
 
 # === Libraries ===
 find_package(sortnetutils REQUIRED)

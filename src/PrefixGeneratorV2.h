@@ -20,8 +20,7 @@ protected:
 	bool symmetric;
 
 	LayerDAG layerDAG;
-	std::vector<Prefix> R, N;
+	std::vector<Prefix> allPrefixes;
 
 	void Generate();
-	void Prune();
 };

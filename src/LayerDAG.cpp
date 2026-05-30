@@ -40,6 +40,7 @@ LayerDAG::LayerDAG(uint8_t n_, bool symmetric_)
 		vertices.insert(newVertices.begin(), newVertices.end());
 	}
 
+#if 0
 	// Add all edges
 	for (const auto& [_, parent] : vertices)
 	{
@@ -59,7 +60,35 @@ LayerDAG::LayerDAG(uint8_t n_, bool symmetric_)
 			parent->children.push_back(child);
 		}
 	}
+#else
+	// Add all edges
+	for (const auto& [_, child] : vertices)
+	{
+		uint64_t size = child->layer.size();
+		if (!size) continue;
+
+		for (uint64_t subset = 0; subset < (1ULL << size) - 1; subset++)
+		{
+			// Build parent layer
+			Network parentLayer;
+			for (uint64_t ceIdx = 0; ceIdx < size; ceIdx++)
+				if (subset & (1ULL << ceIdx))
+					parentLayer.push_back(child->layer[ceIdx]);
+
+			// Sort layer before querying map
+			std::sort(parentLayer.begin(), parentLayer.end());
+			if (!vertices.contains(parentLayer)) continue;
+			Vertex* parent = vertices.at(parentLayer);
+
+			// Add edge
+			parent->children.push_back(child);
+		}
+	}
+#endif
 }
+
+LayerDAG::LayerDAG(uint8_t n_, const std::vector<Network>& allLayers)
+{}
 
 LayerDAG::~LayerDAG()
 {
@@ -75,6 +104,18 @@ size_t LayerDAG::Size() const
 	std::unordered_set<Vertex*> vertices;
 	CollectVertices(root, vertices);
 	return vertices.size();
+}
+
+std::vector<Network> LayerDAG::GetLayers() const
+{
+	std::unordered_set<Vertex*> vertices;
+	CollectVertices(root, vertices);
+
+	std::vector<Network> layers;
+	for (Vertex* vertex : vertices)
+		layers.push_back(vertex->layer);
+
+	return layers;
 }
 
 std::vector<Network> LayerDAG::GetRedundantLayers() const
@@ -98,6 +139,19 @@ std::vector<Network> LayerDAG::GetSaturatedLayers() const
 	std::vector<Network> saturated;
 	for (Vertex* vertex : vertices)
 		if (!vertex->redundant && !vertex->childSubset)
+			saturated.push_back(vertex->layer);
+
+	return saturated;
+}
+
+std::vector<Network> LayerDAG::GetUnsaturatedLayers() const
+{
+	std::unordered_set<Vertex*> vertices;
+	CollectVertices(root, vertices);
+
+	std::vector<Network> saturated;
+	for (Vertex* vertex : vertices)
+		if (vertex->redundant || vertex->childSubset)
 			saturated.push_back(vertex->layer);
 
 	return saturated;
@@ -262,7 +316,7 @@ void LayerDAG::FindRedundant(Vertex* vertex, Vertex* parent)
 
 static inline bool SubsetOrEq(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b)
 {
-	if (a.size() > b.size()) return false;
+	if (a.size() >= b.size()) return false;
 	for (uint64_t x : a)
 		if (!b.contains(x))
 			return false;
@@ -276,6 +330,32 @@ void LayerDAG::FindChildSubsets(Vertex* vertex)
 	for (Vertex* child : vertex->children)
 	{
 		if (SubsetOrEq(child->outputs, vertex->outputs))
+		{
+			hasSubsetChild = true;
+			break;
+		}
+
+		// Try flipping the added comparators
+		std::set<CE> newCEs = NetworkDifference(child->layer, vertex->layer);
+		std::unordered_set<uint64_t> flippedOutputs;
+		for (uint64_t output : child->outputs)
+		{
+			for (auto [lo, hi] : newCEs)
+			{
+				uint64_t leftMask = 1ULL << lo;
+				uint64_t rightMask = 1ULL << hi;
+				uint64_t stationaryMask = ~(leftMask | rightMask);
+				uint64_t shift = hi - lo;
+
+				output = (output & stationaryMask)
+					| (output & leftMask) << shift
+					| (output & rightMask) >> shift;
+			}
+
+			flippedOutputs.insert(output);
+		}
+
+		if (SubsetOrEq(flippedOutputs, vertex->outputs))
 		{
 			hasSubsetChild = true;
 			break;
