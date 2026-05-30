@@ -5,14 +5,13 @@
 
 #include "Timer.h"
 
-#include "prefixes.h"
+#include "Prefixes/prefixes.h"
 #include "SimpleExtender.h"
 #include "IncrementalExtender.h"
-#include "PrefixGenerator.h"
-#include "PrefixGeneratorV2.h"
-#include "PrefixGeneratorV3.h"
-#include "LayerDAG.h"
-#include "Pattern.h"
+#include "Prefixes/PrefixGenerator.h"
+#include "Prefixes/PrefixGeneratorV2.h"
+#include "Prefixes/PrefixGeneratorV3.h"
+#include "Prefixes/LayerDAG.h"
 
 void FractionBenchmark()
 {
@@ -120,161 +119,12 @@ void GenerateCactusPlot()
 	for (double t : times) std::println("{:.3f}", t);
 }
 
-bool IsSaturated(const std::vector<Network>& layers, uint8_t n)
-{
-	// Check for redundancy
-	for (auto [lo, hi] : layers[1])
-		if (lo % 2 == 0 && hi == lo + 1)
-			return false;
-
-	// If second layer is maximal
-	if (layers[1].size() == n / 2)
-		return true;
-
-	// Look for unused i (min channel) and j (max channel) with i < j
-	std::vector<bool> usedChannels(n, false);
-	for (auto [lo, hi] : layers[1]) { usedChannels[lo] = true, usedChannels[hi] = true; }
-	std::vector<uint8_t> unusedMin, unusedMax;
-	for (uint8_t i = 0; i < n; i += 2) if (!usedChannels[i]) unusedMin.push_back(i);
-	for (uint8_t i = 1; i < n; i += 2) if (!usedChannels[i]) unusedMax.push_back(i);
-	if (!unusedMin.empty() && !unusedMax.empty())
-		if (unusedMin[0] < unusedMax.back())
-			return false;
-
-	// Any unused channel in the first layer must be used in the second
-	//if (n % 2 == 1 && !usedChannels[n - 1])
-		//return false;
-
-	Pattern p3a{
-		.m = 4,
-		.ces = { std::vector<CE>{ {0,1}, {2,3} }, std::vector<CE>{ {0,2} } },
-		.singletons = { std::vector<uint8_t>{}, std::vector<uint8_t>{} }
-	};
-
-	Pattern p3b{
-		.m = 4,
-		.ces = { std::vector<CE>{ {0,1}, {2,3} }, std::vector<CE>{ {1,3} } },
-		.singletons = { std::vector<uint8_t>{}, std::vector<uint8_t>{} }
-	};
-
-	std::vector<Pattern> ps{ p3a, p3b };
-	for (const Pattern& p : ps)
-		if (ContainsPattern(layers, n, p))
-			return false;
-
-	return true;
-}
-
 int main()
 {
-#if 0
-	// Get prefix outputs
-	auto outputsVec = GetOutputs(PrefixPar(n), n);
-	std::unordered_set<uint64_t> outputs;
-	outputs.insert(outputsVec.begin(), outputsVec.end());
+	PrefixGeneratorV3 generator{ 12, false };
 
-	// Construct layer DAG
-	LayerDAG layerDag{ n, symmetric };
-	std::println("Num layers: {}", layerDag.Size());
-
-	// Propagate outputs
-	std::println("Propagating outputs...");
-	layerDag.PropagateOutputs(outputs);
-
-	// Assign vertex properties
-	std::println("Assigning vertex properties...");
-	layerDag.FindRedundant();
-	layerDag.FindChildSubsets();
-
-	layerDag.SaveGraphviz("layerdag.gv");
-
-	std::println("Num saturated: {}", layerDag.GetSaturatedLayers().size());
-#endif
-
-#if 0
-	for (uint8_t n = 3; n <= 11; n++)
-	{
-		LayerDAG layerDag{ n, false };
-		Network firstLayer = PrefixPar(n);
-		auto allLayers = layerDag.GetLayers();
-
-		size_t numSaturated = 0;
-		for (const Network& secondLayer : allLayers)
-		{
-			bool isSaturated = IsSaturated({ firstLayer, secondLayer }, n);
-			if (isSaturated)
-				numSaturated++;
-		}
-
-		std::print("{} ", numSaturated);
-	}
-	std::println();
-
-	for (uint8_t n = 3; n <= 11; n++)
-	{
-		auto outputsVec = GetOutputs(PrefixPar(n), n);
-		std::unordered_set<uint64_t> outputs;
-		outputs.insert(outputsVec.begin(), outputsVec.end());
-
-		// Construct layer DAG
-		LayerDAG layerDag{ n, false };
-
-		// Propagate outputs
-		layerDag.PropagateOutputs(outputs);
-
-		// Assign vertex properties
-		layerDag.FindRedundant();
-		layerDag.FindChildSubsets();
-
-		std::print("{} ", layerDag.GetSaturatedLayers().size());
-	}
-#endif
-
-#if 0
-	uint8_t n = 7;
-
-	// Generate prefixes using 'IsSaturated'
-	std::set<Network> satPrefixes1;
-	{
-		LayerDAG layerDag{ n, false };
-		Network firstLayer = PrefixPar(n);
-		auto allLayers = layerDag.GetLayers();
-
-		for (const Network& secondLayer : allLayers)
-			if (IsSaturated({ firstLayer, secondLayer }, n))
-				satPrefixes1.insert(secondLayer);
-	}
-
-	// Generate prefixes using LayerDAG
-	std::set<Network> satPrefixes2;
-	{
-		auto outputsVec = GetOutputs(PrefixPar(n), n);
-		std::unordered_set<uint64_t> outputs;
-		outputs.insert(outputsVec.begin(), outputsVec.end());
-
-		// Construct layer DAG
-		LayerDAG layerDag{ n, false };
-
-		// Propagate outputs
-		layerDag.PropagateOutputs(outputs);
-
-		// Assign vertex properties
-		layerDag.FindRedundant();
-		layerDag.FindChildSubsets();
-
-		for (const Network& secondLayer : layerDag.GetSaturatedLayers())
-			satPrefixes2.insert(secondLayer);
-	}
-
-	std::println("Num saturated 1: {}", satPrefixes1.size());
-	std::println("Num saturated 2: {}", satPrefixes2.size());
-
-	for (const Network& layer : satPrefixes2)
-		if (!satPrefixes1.contains(layer))
-			std::println("{}", layer);
-#endif
-
-	PrefixGeneratorV3 generator{ 7, false };
+	TIMER(t);
 	auto allPrefixes = generator.Generate();
+	STOP_LOG(t);
 	std::print("{} ", allPrefixes.size());
 }

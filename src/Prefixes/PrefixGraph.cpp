@@ -18,7 +18,7 @@ PrefixGraph::~PrefixGraph()
 void PrefixGraph::AddPrefix(const Prefix& prefix)
 {
 	size_t idx = nextVertexIdx++;
-	Vertex* vertex = new Vertex{ idx, {} };
+	Vertex* vertex = new Vertex{ idx, { n } };
 
 	Prefix sortedPrefix{ prefix };
 	for (Network& layer : sortedPrefix)
@@ -44,6 +44,17 @@ void PrefixGraph::AddEquivalenceEdges()
 		const Prefix& prefix = idxToPrefix[idx];
 		auto [it, inserted] = equivalenceClasses.try_emplace(NetworkGraph{ prefix, n }, std::vector<size_t>{ idx });
 		if (!inserted) it->second.push_back(idx);
+	}
+
+	// Reserve space for edges
+	for (const auto& [_, equivalenceClass] : equivalenceClasses)
+	{
+		for (size_t idx : equivalenceClass)
+		{
+			Vertex* v = idxToVertex[idx];
+			v->incoming.reserve(equivalenceClass.size() - 1);
+			v->outgoing.reserve(equivalenceClass.size() - 1);
+		}
 	}
 
 	// Add bi-directional edges between all vertices in the same class
@@ -124,28 +135,26 @@ void PrefixGraph::SaveGraphviz(const std::string& filepath) const
 
 void PrefixGraph::ComputeOutputs(Vertex* vertex)
 {
-	if (!vertex->outputs.empty()) return;
+	if (!vertex->outputs.IsEmpty()) return;
 
 	const Prefix& prefix = idxToPrefix[vertex->idx];
 	Network prefixNetwork;
 	for (const Network& layer : prefix)
 		Append(prefixNetwork, layer);
-	auto outputsVec = GetOutputs(prefixNetwork, n);
-	for (uint64_t output : outputsVec)
-		vertex->outputs.insert(output);
+	vertex->outputs = GetOutputs(prefixNetwork, n);
 }
 
 void PrefixGraph::AddEdge(Vertex* a, Vertex* b)
 {
-	a->outgoing.insert(b);
-	b->incoming.insert(a);
+	a->outgoing.push_back(b);
+	b->incoming.push_back(a);
 }
 
-static inline bool IsSubset(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b)
+static inline bool IsSubset(const OutputSet& a, const OutputSet& b)
 {
-	if (a.size() >= b.size()) return false;
+	if (a.Size() >= b.Size()) return false;
 	for (uint64_t x : a)
-		if (!b.contains(x))
+		if (!b.Contains(x))
 			return false;
 	return true;
 }
@@ -190,13 +199,13 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex)
 			uint64_t stationaryMask = ~(leftMask | rightMask);
 			uint64_t shift = j - i;
 
-			std::unordered_set<uint64_t> flippedOutputs;
+			OutputSet flippedOutputs{ n, extVertex->outputs.Size() };
 			for (uint64_t output : extVertex->outputs)
 			{
 				output = (output & stationaryMask)
 					| (output & leftMask) << shift
 					| (output & rightMask) >> shift;
-				flippedOutputs.insert(output);
+				flippedOutputs.Insert(output);
 			}
 			
 			// Check for identical outputs

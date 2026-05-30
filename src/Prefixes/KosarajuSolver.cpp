@@ -5,7 +5,7 @@
 #include "PrefixGraph.h"
 
 KosarajuSolver::KosarajuSolver(const PrefixGraph& graph_)
-	: graph(graph_)
+	: graph(graph_), visited(graph.nextVertexIdx, false), assigned(graph.nextVertexIdx, false)
 {
 	L.reserve(graph.nextVertexIdx);
 }
@@ -18,7 +18,7 @@ std::vector<std::unordered_set<size_t>> KosarajuSolver::ExtractComponents()
 	std::vector<std::unordered_set<size_t>> components;
 	for (size_t idx : L | std::views::reverse)
 	{
-		if (assigned.contains(idx)) continue;
+		if (assigned[idx]) continue;
 
 		std::unordered_set<size_t> component;
 		Assign(idx, component);
@@ -30,10 +30,10 @@ std::vector<std::unordered_set<size_t>> KosarajuSolver::ExtractComponents()
 
 void KosarajuSolver::Visit(size_t idx)
 {
-	if (visited.contains(idx)) return;
+	if (visited[idx]) return;
 
 	// Mark nodes as visited
-	visited.insert(idx);
+	visited[idx] = true;
 
 	// Visit all out-children of this node
 	for (PrefixGraph::Vertex* outChild : graph.idxToVertex[idx]->outgoing)
@@ -44,10 +44,10 @@ void KosarajuSolver::Visit(size_t idx)
 
 void KosarajuSolver::Assign(size_t idx, std::unordered_set<size_t>& component)
 {
-	if (assigned.contains(idx)) return;
+	if (assigned[idx]) return;
 
 	// Assign node to component
-	assigned.insert(idx);
+	assigned[idx] = true;
 	component.insert(idx);
 
 	// Assign all in-children of this node

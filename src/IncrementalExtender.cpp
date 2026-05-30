@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <ranges>
 
-#include "prefixes.h"
+#include "Prefixes/prefixes.h"
 
 IncrementalExtender::IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix)
 	: Extender(n_, d_, symmetric_, prefix), generator(n, dPost, symmetric)

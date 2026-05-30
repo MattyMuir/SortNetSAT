@@ -4,6 +4,8 @@
 
 #include <sortnetutils.h>
 
+#include "OutputSet.h"
+
 class PrefixGraph
 {
 protected:
@@ -12,8 +14,8 @@ protected:
 	struct Vertex
 	{
 		size_t idx;
-		std::unordered_set<uint64_t> outputs;
-		std::unordered_set<Vertex*> incoming, outgoing;
+		OutputSet outputs;
+		std::vector<Vertex*> incoming, outgoing;
 	};
 
 public:

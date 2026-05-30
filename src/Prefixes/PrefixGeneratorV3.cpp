@@ -32,7 +32,7 @@ std::vector<Network> PrefixGeneratorV3::Generate()
 	graph.ComputeOutputs();
 	graph.AddEquivalenceEdges();
 	graph.AddOutputEdges();
-	graph.SaveGraphviz("graph.gv");
+	//graph.SaveGraphviz("graph.gv");
 
 	return graph.GetRepresentatives();
 }

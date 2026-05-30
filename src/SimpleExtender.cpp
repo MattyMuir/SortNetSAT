@@ -1,7 +1,7 @@
 #include "SimpleExtender.h"
 
-#include "prefixes.h"
-#include "WindowMinimizer.h"
+#include "Prefixes/prefixes.h"
+#include "Prefixes/WindowMinimizer.h"
 #include "FormulaGenerator.h"
 
 SimpleExtender::SimpleExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix)
