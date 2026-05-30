@@ -58,14 +58,12 @@ void PrefixGeneratorV2::Generate()
 			nextAllPrefixes.emplace(NetworkGraph{ newPrefix, n }, newPrefix);
 		}
 
-		/*
 		for (const Network& layer : unsaturatedLayers)
 		{
 			Prefix newPrefix{ partialPrefix };
 			newPrefix.push_back(layer);
 			nextAllPrefixes.erase(NetworkGraph{ newPrefix, n });
 		}
-		*/
 	}
 
 	allPrefixes.clear();

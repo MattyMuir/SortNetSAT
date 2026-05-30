@@ -23,7 +23,7 @@ void OutputSet::Insert(uint64_t output)
 
 OutputSet& OutputSet::operator=(std::vector<uint64_t>&& outputs_)
 {
-	outputs = outputs_;
+	outputs = std::move(outputs_);
 	for (uint64_t output : outputs)
 		containsOutput[output] = true;
 	return *this;

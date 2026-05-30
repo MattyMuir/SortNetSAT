@@ -31,8 +31,6 @@ PrefixGenerator::PrefixGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 			if (CanAddCE(allLayers[li], ce))
 				allLayers.emplace_back(AddCE(allLayers[li], ce));
 	}
-
-	std::println("Num layers: {}", allLayers.size());
 }
 
 std::vector<Network> PrefixGenerator::GeneratePrefixes()
@@ -55,8 +53,6 @@ void PrefixGenerator::Generate()
 	for (const NetworkOutputs& partialPrefix : R)
 		for (const Network& layer : allLayers)
 			N.emplace_back(AddLayer(partialPrefix, layer));
-
-	std::println("N: {}", N.size());
 }
 
 void PrefixGenerator::Prune()
@@ -76,8 +72,6 @@ void PrefixGenerator::Prune()
 		// Add to R
 		R.push_back(prefix);
 	}
-
-	std::println("R: {}", R.size());
 }
 
 bool PrefixGenerator::CanAddCE(const Network& layer, CE ce) const

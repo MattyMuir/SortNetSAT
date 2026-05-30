@@ -314,7 +314,7 @@ void LayerDAG::FindRedundant(Vertex* vertex, Vertex* parent)
 		FindRedundant(child, vertex);
 }
 
-static inline bool SubsetOrEq(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b)
+static inline bool Subset(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b)
 {
 	if (a.size() >= b.size()) return false;
 	for (uint64_t x : a)
@@ -329,7 +329,7 @@ void LayerDAG::FindChildSubsets(Vertex* vertex)
 	bool hasSubsetChild = false;
 	for (Vertex* child : vertex->children)
 	{
-		if (SubsetOrEq(child->outputs, vertex->outputs))
+		if (Subset(child->outputs, vertex->outputs))
 		{
 			hasSubsetChild = true;
 			break;
@@ -355,7 +355,7 @@ void LayerDAG::FindChildSubsets(Vertex* vertex)
 			flippedOutputs.insert(output);
 		}
 
-		if (SubsetOrEq(flippedOutputs, vertex->outputs))
+		if (Subset(flippedOutputs, vertex->outputs))
 		{
 			hasSubsetChild = true;
 			break;
