@@ -12,6 +12,7 @@
 #include "Prefixes/PrefixGeneratorV2.h"
 #include "Prefixes/PrefixGeneratorV3.h"
 #include "Prefixes/LayerDAG.h"
+#include "Prefixes/WindowMinimizer.h"
 
 void FractionBenchmark()
 {
@@ -121,10 +122,6 @@ void GenerateCactusPlot()
 
 int main()
 {
-	for (uint8_t n = 4; n <= 14; n += 2)
-	{
-		PrefixGeneratorV2 generator{ n, 2, true };
-		auto allPrefixes = generator.GeneratePrefixes();
-		std::print("{} ", allPrefixes.size());
-	}
+	PrefixGeneratorV3 generator{ 18, 2, true };
+	generator.GeneratePrefixes();
 }

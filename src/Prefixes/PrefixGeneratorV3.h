@@ -6,12 +6,12 @@
 class PrefixGeneratorV3
 {
 public:
-	PrefixGeneratorV3(uint8_t n_, bool symmetric_);
+	PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_);
 
-	std::vector<Network> Generate();
+	std::vector<Network> GeneratePrefixes();
 
 protected:
-	uint8_t n;
+	uint8_t n, d;
 	bool symmetric;
 
 	std::vector<CE> alphabet;

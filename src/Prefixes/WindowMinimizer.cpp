@@ -15,7 +15,7 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 
 	for (size_t runIdx = 0; runIdx < runs; runIdx++)
 	{
-		std::print("Best: {:<10}\r", globalPopulation.begin()->first);
+		//std::print("Best: {:<10}\r", globalPopulation.begin()->first);
 
 		// Every member of the population has one child
 		std::multimap<uint64_t, Permutation> nextGeneration{ globalPopulation };
@@ -30,7 +30,6 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 		std::advance(cutoff, populationSize);
 		globalPopulation.erase(cutoff, globalPopulation.end());
 	}
-	std::println();
 
 	Network optPrefix{ initialPrefix };
 	Permute(optPrefix, globalPopulation.begin()->second.perm);

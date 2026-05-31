@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fstream>
 
+#include "../Timer.h"
 #include "NetworkGraph.h"
 #include "KosarajuSolver.h"
 
@@ -17,13 +18,16 @@ PrefixGraph::~PrefixGraph()
 
 void PrefixGraph::AddPrefix(const Prefix& prefix)
 {
+	// Create new vertex and increment nextVertexIdx
 	size_t idx = nextVertexIdx++;
 	Vertex* vertex = new Vertex{ idx, { n } };
 
+	// Sort network to ensure correct map lookup
 	Prefix sortedPrefix{ prefix };
 	for (Network& layer : sortedPrefix)
 		std::sort(layer.begin(), layer.end());
 
+	// Add entires in the maps
 	prefixToIdx.emplace(sortedPrefix, idx);
 	idxToVertex.push_back(vertex);
 	idxToPrefix.push_back(sortedPrefix);
@@ -31,12 +35,15 @@ void PrefixGraph::AddPrefix(const Prefix& prefix)
 
 void PrefixGraph::ComputeOutputs()
 {
+	TIMER(computeOutputs);
 	for (Vertex* vertex : idxToVertex)
 		ComputeOutputs(vertex);
+	STOP_LOG(computeOutputs);
 }
 
 void PrefixGraph::AddEquivalenceEdges()
 {
+	TIMER(equivalence);
 	// Determine equivalence classes
 	std::map<NetworkGraph, std::vector<size_t>> equivalenceClasses;
 	for (size_t idx = 0; idx < nextVertexIdx; idx++)
@@ -46,42 +53,26 @@ void PrefixGraph::AddEquivalenceEdges()
 		if (!inserted) it->second.push_back(idx);
 	}
 
-	// Reserve space for edges
-	for (const auto& [_, equivalenceClass] : equivalenceClasses)
-	{
-		for (size_t idx : equivalenceClass)
-		{
-			Vertex* v = idxToVertex[idx];
-			v->incoming.reserve(equivalenceClass.size() - 1);
-			v->outgoing.reserve(equivalenceClass.size() - 1);
-		}
-	}
-
 	// Add bi-directional edges between all vertices in the same class
 	for (const auto& [_, equivalenceClass] : equivalenceClasses)
-	{
 		for (size_t idx1 : equivalenceClass)
-		{
 			for (size_t idx2 : equivalenceClass)
-			{
-				if (idx1 == idx2) continue;
-
-				Vertex* v1 = idxToVertex[idx1];
-				Vertex* v2 = idxToVertex[idx2];
-				AddEdge(v1, v2);
-			}
-		}
-	}
+				if (idx1 != idx2)
+					AddEdge(idxToVertex[idx1], idxToVertex[idx2]);
+	STOP_LOG(equivalence);
 }
 
 void PrefixGraph::AddOutputEdges()
 {
+	TIMER(addOutputEdges);
 	for (Vertex* vertex : idxToVertex)
 		AddOutputEdges(vertex);
+	STOP_LOG(addOutputEdges);
 }
 
 std::vector<Network> PrefixGraph::GetRepresentatives() const
 {
+	TIMER(getRepresentatives);
 	// Extract strongly-connected components from the graph
 	KosarajuSolver kosaraju{ *this };
 	auto sccs = kosaraju.ExtractComponents();
@@ -99,23 +90,23 @@ std::vector<Network> PrefixGraph::GetRepresentatives() const
 			if (idxToComponent[vertex->idx] != idxToComponent[outChild->idx])
 				hasIncoming[idxToComponent[outChild->idx]] = true;
 
+	// Take one representative from each SCC with no incoming edges
 	std::vector<Network> representatives;
 	for (size_t sccIdx = 0; sccIdx < sccs.size(); sccIdx++)
 	{
 		if (hasIncoming[sccIdx]) continue;
 		size_t representativeIdx = *sccs[sccIdx].begin();
 		const Prefix& prefix = idxToPrefix[representativeIdx];
-		Network network;
-		for (const Network& layer : prefix)
-			Append(network, layer);
-		representatives.push_back(network);
+		representatives.push_back(Concatenate(prefix));
 	}
 
+	STOP_LOG(getRepresentatives);
 	return representatives;
 }
 
 void PrefixGraph::SaveGraphviz(const std::string& filepath) const
 {
+	// Write header
 	std::ofstream file{ filepath };
 	file << "digraph G {\n";
 
@@ -135,19 +126,38 @@ void PrefixGraph::SaveGraphviz(const std::string& filepath) const
 
 void PrefixGraph::ComputeOutputs(Vertex* vertex)
 {
-	if (!vertex->outputs.IsEmpty()) return;
-
 	const Prefix& prefix = idxToPrefix[vertex->idx];
-	Network prefixNetwork;
-	for (const Network& layer : prefix)
-		Append(prefixNetwork, layer);
-	vertex->outputs = GetOutputs(prefixNetwork, n);
+	vertex->outputs = GetOutputs(Concatenate(prefix), n);
 }
 
 void PrefixGraph::AddEdge(Vertex* a, Vertex* b)
 {
 	a->outgoing.push_back(b);
 	b->incoming.push_back(a);
+}
+
+OutputSet PrefixGraph::SwapChannels(const OutputSet& outputs, uint8_t i, uint8_t j)
+{
+	uint64_t leftMask = 1ULL << i;
+	uint64_t rightMask = 1ULL << j;
+	if (symmetric)
+	{
+		leftMask |= 1ULL << (n - 1 - j);
+		rightMask |= 1ULL << (n - 1 - i);
+	}
+	uint64_t stationaryMask = ~(leftMask | rightMask);
+	uint64_t shift = j - i;
+
+	OutputSet flippedOutputs{ n, outputs.Size() };
+	for (uint64_t output : outputs)
+	{
+		output = (output & stationaryMask)
+			| (output & leftMask) << shift
+			| (output & rightMask) >> shift;
+		flippedOutputs.Insert(output);
+	}
+
+	return flippedOutputs;
 }
 
 static inline bool IsSubset(const OutputSet& a, const OutputSet& b)
@@ -170,12 +180,19 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex)
 	{
 		for (uint8_t j = i + 1; j < n; j++)
 		{
+			// Check if this CE fits in the last layer of the prefix
+			uint64_t ceMask = (1ULL << i) | (1ULL << j);
+			if (symmetric) ceMask |= (1ULL << (n - 1 - j)) | (1ULL << (n - 1 - i));
 			if (usedChannels & ((1ULL << i) | (1ULL << j))) continue;
 
+			// Create the extended prefix by adding this CE
 			Prefix extPrefix{ prefix };
 			extPrefix.back().push_back({ i, j });
-			std::sort(extPrefix.back().begin(), extPrefix.back().end());
+			if (symmetric && i != n - 1 - j)
+				extPrefix.back().push_back({ (uint8_t)(n - 1 - j), (uint8_t)(n - 1 - i) });
 
+			// Lookup the vertex for the extended prefix
+			std::sort(extPrefix.back().begin(), extPrefix.back().end());
 			size_t extIdx = prefixToIdx.at(extPrefix);
 			Vertex* extVertex = idxToVertex[extIdx];
 
@@ -194,19 +211,7 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex)
 				continue;
 			}
 			
-			uint64_t leftMask = 1ULL << i;
-			uint64_t rightMask = 1ULL << j;
-			uint64_t stationaryMask = ~(leftMask | rightMask);
-			uint64_t shift = j - i;
-
-			OutputSet flippedOutputs{ n, extVertex->outputs.Size() };
-			for (uint64_t output : extVertex->outputs)
-			{
-				output = (output & stationaryMask)
-					| (output & leftMask) << shift
-					| (output & rightMask) >> shift;
-				flippedOutputs.Insert(output);
-			}
+			OutputSet flippedOutputs = SwapChannels(extVertex->outputs, i, j);
 			
 			// Check for identical outputs
 			if (vertex->outputs == flippedOutputs)

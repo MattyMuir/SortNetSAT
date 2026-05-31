@@ -44,6 +44,7 @@ protected:
 
 	void ComputeOutputs(Vertex* vertex);
 	void AddEdge(Vertex* a, Vertex* b);
+	OutputSet SwapChannels(const OutputSet& outputs, uint8_t i, uint8_t j);
 	void AddOutputEdges(Vertex* vertex);
 
 	friend class KosarajuSolver;

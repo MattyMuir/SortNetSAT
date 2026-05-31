@@ -127,19 +127,7 @@ std::vector<Network> ParsePrefixFile(const std::string& filepath)
 	std::ifstream file{ filepath };
 	std::string line;
 	while (std::getline(file, line))
-	{
-		Network prefix;
-
-		auto parts = Split(line, ";");
-		for (size_t ceIdx = 0; ceIdx < parts.size() / 3; ceIdx++)
-		{
-			uint8_t lo = std::stoul(parts[ceIdx * 3 + 1]);
-			uint8_t hi = std::stoul(parts[ceIdx * 3 + 2]);
-			prefix.push_back({ lo, hi });
-		}
-
-		prefixes.push_back(prefix);
-	}
+		prefixes.push_back(ParseNetwork(line));
 
 	return prefixes;
 }

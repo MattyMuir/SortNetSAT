@@ -2,8 +2,8 @@
 
 #include "prefixes.h"
 
-PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, bool symmetric_)
-	: n(n_), symmetric(symmetric_), graph(n, symmetric)
+PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)
+	: n(n_), d(d_), symmetric(symmetric_), graph(n, symmetric)
 {
 	// Initialize alphabet
 	for (uint8_t i = 0; i + 1 < n; i++)
@@ -22,7 +22,7 @@ PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, bool symmetric_)
 	}
 }
 
-std::vector<Network> PrefixGeneratorV3::Generate()
+std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 {
 	// Add all prefixes to graph
 	Network firstLayer = PrefixPar(n);
