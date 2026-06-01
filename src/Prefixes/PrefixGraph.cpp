@@ -4,6 +4,7 @@
 #include <fstream>
 #include <set>
 #include <ranges>
+#include <ranges>
 
 #include "../Timer.h"
 #include "NetworkGraph.h"
@@ -47,12 +48,17 @@ void PrefixGraph::AddEquivalenceEdges()
 		if (!inserted) it->second.push_back(idx);
 	}
 
-	// Add bi-directional edges between all vertices in the same class
+	// Add a cycle through all vertices of the class to make them an SCC
 	for (const auto& [_, equivalenceClass] : equivalenceClasses)
-		for (size_t idx1 : equivalenceClass)
-			for (size_t idx2 : equivalenceClass)
-				if (idx1 != idx2)
-					AddEdge(idxToVertex[idx1], idxToVertex[idx2]);
+	{
+		if (equivalenceClass.size() == 1) continue;
+		for (size_t i = 0; i < equivalenceClass.size(); i++)
+		{
+			size_t idx1 = equivalenceClass[i];
+			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
+			AddEdge(idxToVertex[idx1], idxToVertex[idx2]);
+		}
+	}
 	STOP_LOG(equivalence);
 }
 
@@ -299,4 +305,6 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex, const OutputSet& outputs)
 	}
 
 	vertex->doneOutputEdges = true;
+	if (++numVerticesProcessed % 100 == 0)
+		std::print("{:.3f}%\r", (double)numVerticesProcessed / idxToVertex.size() * 100.0);
 }

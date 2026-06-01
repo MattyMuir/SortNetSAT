@@ -40,6 +40,7 @@ protected:
 	std::map<Prefix, size_t> prefixToIdx;
 	std::vector<Vertex*> idxToVertex;
 	std::vector<Prefix> idxToPrefix;
+	size_t numVerticesProcessed = 0;
 
 	void AddEdge(Vertex* a, Vertex* b);
 	OutputSet SwapChannels(const OutputSet& outputs, uint8_t i, uint8_t j);
