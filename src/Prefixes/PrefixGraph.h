@@ -14,7 +14,7 @@ protected:
 	struct Vertex
 	{
 		size_t idx;
-		OutputSet outputs;
+		bool doneOutputEdges = false;
 		std::vector<Vertex*> incoming, outgoing;
 	};
 
@@ -25,7 +25,6 @@ public:
 	~PrefixGraph();
 
 	void AddPrefix(const Prefix& prefix);
-	void ComputeOutputs();
 	void AddEquivalenceEdges();
 	void AddOutputEdges();
 
@@ -42,10 +41,13 @@ protected:
 	std::vector<Vertex*> idxToVertex;
 	std::vector<Prefix> idxToPrefix;
 
-	void ComputeOutputs(Vertex* vertex);
 	void AddEdge(Vertex* a, Vertex* b);
 	OutputSet SwapChannels(const OutputSet& outputs, uint8_t i, uint8_t j);
-	void AddOutputEdges(Vertex* vertex);
+	std::vector<std::pair<Vertex*, CE>> GetExtensions(Vertex* vertex) const;
+	OutputSet ReduceSet(const OutputSet& outputs, CE ce) const;
+	OutputSet ReduceSetUnsym(const OutputSet& outputs, CE ce) const;
+	OutputSet ReduceSetSym(const OutputSet& outputs, CE ce) const;
+	void AddOutputEdges(Vertex* vertex, const OutputSet& outputs);
 
 	friend class KosarajuSolver;
 };

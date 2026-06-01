@@ -123,5 +123,6 @@ void GenerateCactusPlot()
 int main()
 {
 	PrefixGeneratorV3 generator{ 18, 2, true };
-	generator.GeneratePrefixes();
+	auto allPrefixes = generator.GeneratePrefixes();
+	std::print("{} ", allPrefixes.size());
 }

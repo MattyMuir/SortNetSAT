@@ -21,6 +21,11 @@ void OutputSet::Insert(uint64_t output)
 	containsOutput[output] = true;
 }
 
+void OutputSet::Reserve(size_t num)
+{
+	outputs.reserve(num);
+}
+
 OutputSet& OutputSet::operator=(std::vector<uint64_t>&& outputs_)
 {
 	outputs = std::move(outputs_);

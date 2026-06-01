@@ -1,6 +1,7 @@
 #include "PrefixGeneratorV3.h"
 
 #include "prefixes.h"
+#include "../Timer.h"
 
 PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_), graph(n, symmetric)
@@ -25,11 +26,12 @@ PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)
 std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 {
 	// Add all prefixes to graph
+	TIMER(addingPrefixes);
 	Network firstLayer = PrefixPar(n);
 	for (const Network& secondLayer : allLayers)
 		graph.AddPrefix({ firstLayer, secondLayer });
+	STOP_LOG(addingPrefixes);
 
-	graph.ComputeOutputs();
 	graph.AddEquivalenceEdges();
 	graph.AddOutputEdges();
 	//graph.SaveGraphviz("graph.gv");

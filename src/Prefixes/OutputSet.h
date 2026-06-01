@@ -8,6 +8,7 @@ public:
 	OutputSet(uint8_t n, size_t reserve);
 
 	void Insert(uint64_t output);
+	void Reserve(size_t num);
 
 	OutputSet& operator=(std::vector<uint64_t>&& outputs_);
 	bool operator==(const OutputSet& other) const;
