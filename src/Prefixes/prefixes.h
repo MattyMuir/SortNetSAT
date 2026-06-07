@@ -10,3 +10,5 @@ uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs, bool
 void SortByWindowWidth(uint8_t n, std::vector<uint64_t>& outputs);
 Network GreedyPrefix(uint8_t n, uint8_t d, bool symmetric);
 std::vector<Network> ParsePrefixFile(const std::string& filepath);
+std::vector<Network> SortByNumOutputs(const std::vector<Network>& networks, bool symmetric);
+void SavePrefixFile(const std::string& filepath, const std::vector<Network>& prefixes);

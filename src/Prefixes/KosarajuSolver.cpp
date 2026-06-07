@@ -1,6 +1,7 @@
 #include "KosarajuSolver.h"
 
 #include <ranges>
+#include <stack>
 
 #include "PrefixGraph.h"
 
@@ -28,30 +29,55 @@ std::vector<std::unordered_set<size_t>> KosarajuSolver::ExtractComponents()
 	return components;
 }
 
-void KosarajuSolver::Visit(size_t idx)
+void KosarajuSolver::Visit(size_t startIdx)
 {
-	if (visited[idx]) return;
+	if (visited[startIdx]) return;
 
-	// Mark nodes as visited
-	visited[idx] = true;
+	std::stack<std::pair<size_t, bool>> stack;
+	stack.emplace(startIdx, false);
 
-	// Visit all out-children of this node
-	for (PrefixGraph::Vertex* outChild : graph.idxToVertex[idx]->outgoing)
-		Visit(outChild->idx);
+	while (!stack.empty())
+	{
+		auto [idx, ready] = stack.top();
+		stack.pop();
 
-	L.push_back(idx);
+		if (ready)
+		{
+			L.push_back(idx);
+			continue;
+		}
+
+		if (visited[idx])
+			continue;
+
+		visited[idx] = true;
+
+		stack.emplace(idx, true);
+
+		for (auto* child : graph.idxToVertex[idx]->outgoing | std::views::reverse)
+			stack.emplace(child->idx, false);
+	}
 }
 
-void KosarajuSolver::Assign(size_t idx, std::unordered_set<size_t>& component)
+void KosarajuSolver::Assign(size_t startIdx, std::unordered_set<size_t>& component)
 {
-	if (assigned[idx]) return;
+	if (assigned[startIdx]) return;
 
-	// Assign node to component
-	assigned[idx] = true;
-	component.insert(idx);
+	std::stack<size_t> stack;
+	stack.push(startIdx);
 
-	// Assign all in-children of this node
-	PrefixGraph::Vertex* vertex = graph.idxToVertex[idx];
-	for (PrefixGraph::Vertex* inChild : graph.idxToVertex[idx]->incoming)
-		Assign(inChild->idx, component);
+	while (!stack.empty())
+	{
+		size_t idx = stack.top();
+		stack.pop();
+
+		if (assigned[idx])
+			continue;
+
+		assigned[idx] = true;
+		component.insert(idx);
+
+		for (auto* child : graph.idxToVertex[idx]->incoming)
+			stack.push(child->idx);
+	}
 }

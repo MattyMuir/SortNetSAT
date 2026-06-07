@@ -4,7 +4,7 @@
 #include "../Timer.h"
 
 PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)
-	: n(n_), d(d_), symmetric(symmetric_), graph(n, symmetric)
+	: n(n_), d(d_), symmetric(symmetric_)
 {
 	// Initialize alphabet
 	for (uint8_t i = 0; i + 1 < n; i++)
@@ -25,18 +25,34 @@ PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)
 
 std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 {
-	// Add all prefixes to graph
-	TIMER(addingPrefixes);
-	Network firstLayer = PrefixPar(n);
-	for (const Network& secondLayer : allLayers)
-		graph.AddPrefix({ firstLayer, secondLayer });
-	STOP_LOG(addingPrefixes);
+	allPrefixes.push_back({ PrefixPar(n) });
 
-	graph.AddEquivalenceEdges();
-	graph.AddOutputEdges();
-	//graph.SaveGraphviz("graph.gv");
+	for (uint8_t k = 1; k < d; k++)
+	{
+		// Extend all current prefixes by all possible layers and add to graph
+		PrefixGraph graph{ n, symmetric };
+		for (const auto& partialPrefix : allPrefixes)
+		{
+			for (const Network& layer : allLayers)
+			{
+				std::vector<Network> extPrefix{ partialPrefix };
+				extPrefix.push_back(layer);
+				graph.AddPrefix(extPrefix);
+			}
+		}
 
-	return graph.GetRepresentatives();
+		// Construct subsumption edges and get representatives
+		graph.AddEquivalenceEdges();
+		graph.AddOutputEdges();
+		graph.SaveGraphviz(std::format("graph_{}_{}_d{}.gv", n, symmetric ? "sym" : "unsym", k + 1));
+		allPrefixes = graph.GetRepresentatives();
+	}
+
+	// Convert layer-based prefixes to regular networks
+	std::vector<Network> prefixesConcat;
+	for (const auto& prefix : allPrefixes)
+		prefixesConcat.push_back(Concatenate(prefix));
+	return prefixesConcat;
 }
 
 bool PrefixGeneratorV3::CanAddCE(const Network& layer, CE ce) const

@@ -61,12 +61,12 @@ void Wang()
 			{0,1},{2,3},{4,5},{6,7},{8,10},{9,11},{12,14},{13,15},{16,18},{17,19},{20,21},{22,23},{24,25},{26,27},
 			{0,2},{1,3},{4,6},{5,7},{8,19},{9,12},{10,14},{11,16},{13,17},{15,18},{20,22},{21,23},{24,26},{25,27},
 			{0,4},{1,5},{2,20},{3,21},{6,24},{7,25},{8,13},{9,11},{10,17},{12,15},{14,19},{16,18},{22,26},{23,27},
-			{1,2},{3,24},{4,6},{5,22},{7,20},{8,9},{10,12},{11,13},{14,16},{15,17},{18,19},{21,23},{25,26},
-			{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
+			//{1,2},{3,24},{4,6},{5,22},{7,20},{8,9},{10,12},{11,13},{14,16},{15,17},{18,19},{21,23},{25,26},
+			//{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
 		} };
 	// ==================
 
-	SimpleExtender extender{ n, d, symmetric, prefix };
+	IncrementalExtender extender{ n, d, symmetric, prefix };
 	bool extendable = extender.Extend();
 	if (!extendable) std::println("Unextendable!");
 	else std::println("{:t}", extender.GetNetwork());
@@ -122,7 +122,10 @@ void GenerateCactusPlot()
 
 int main()
 {
-	PrefixGeneratorV3 generator{ 16, 2, true };
-	auto allPrefixes = generator.GeneratePrefixes();
-	std::print("{} ", allPrefixes.size());
+	for (size_t i = 0; i < 10; i++)
+	{
+		PrefixGeneratorV2 generator{ 8, 2, true };
+		auto allPrefixes = generator.GeneratePrefixes();
+		//std::println("{}", allPrefixes.size());
+	}
 }

@@ -16,7 +16,7 @@ protected:
 
 	std::vector<CE> alphabet;
 	std::vector<Network> allLayers;
-	PrefixGraph graph;
+	std::vector<std::vector<Network>> allPrefixes;
 
 	bool CanAddCE(const Network& layer, CE ce) const;
 	Network AddCE(const Network& layer, CE ce) const;

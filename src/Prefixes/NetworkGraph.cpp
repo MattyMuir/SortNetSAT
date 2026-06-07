@@ -81,3 +81,8 @@ bool NetworkGraph::operator==(const NetworkGraph& other) const
 {
 	return graph->cmp(*other.graph) == 0;
 }
+
+uint32_t NetworkGraph::GetHash() const
+{
+	return graph->get_hash();
+}

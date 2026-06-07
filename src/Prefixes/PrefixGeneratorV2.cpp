@@ -13,8 +13,7 @@ PrefixGeneratorV2::PrefixGeneratorV2(uint8_t n_, uint8_t d_, bool symmetric_)
 
 std::vector<Network> PrefixGeneratorV2::GeneratePrefixes()
 {
-	Prefix initialPrefix;
-	initialPrefix.push_back(PrefixPar(n));
+	Prefix initialPrefix{ PrefixPar(n) };
 	allPrefixes.push_back(initialPrefix);
 	for (uint8_t k = 1; k < d; k++)
 		Generate();
@@ -37,14 +36,13 @@ void PrefixGeneratorV2::Generate()
 	for (const Prefix& partialPrefix : allPrefixes)
 	{
 		// Get prefix outputs
-		Network prefixConcat;
-		for (const Network& layer : partialPrefix)
-			Append(prefixConcat, layer);
+		Network prefixConcat = Concatenate(partialPrefix);
 		auto outputsVec = GetOutputs(prefixConcat, n);
 		std::unordered_set<uint64_t> outputSet;
 		outputSet.insert(outputsVec.begin(), outputsVec.end());
 
 		// Get saturated layers
+		layerDAG.Reset();
 		layerDAG.PropagateOutputs(outputSet);
 		layerDAG.FindRedundant();
 		layerDAG.FindChildSubsets();

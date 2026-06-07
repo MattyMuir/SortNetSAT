@@ -16,6 +16,6 @@ protected:
 	std::vector<bool> visited, assigned;
 	std::vector<size_t> L;
 
-	void Visit(size_t idx);
-	void Assign(size_t idx, std::unordered_set<size_t>& component);
+	void Visit(size_t startIdx);
+	void Assign(size_t startIdx, std::unordered_set<size_t>& component);
 };

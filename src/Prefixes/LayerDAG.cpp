@@ -40,7 +40,6 @@ LayerDAG::LayerDAG(uint8_t n_, bool symmetric_)
 		vertices.insert(newVertices.begin(), newVertices.end());
 	}
 
-#if 0
 	// Add all edges
 	for (const auto& [_, parent] : vertices)
 	{
@@ -60,31 +59,6 @@ LayerDAG::LayerDAG(uint8_t n_, bool symmetric_)
 			parent->children.push_back(child);
 		}
 	}
-#else
-	// Add all edges
-	for (const auto& [_, child] : vertices)
-	{
-		uint64_t size = child->layer.size();
-		if (!size) continue;
-
-		for (uint64_t subset = 0; subset < (1ULL << size) - 1; subset++)
-		{
-			// Build parent layer
-			Network parentLayer;
-			for (uint64_t ceIdx = 0; ceIdx < size; ceIdx++)
-				if (subset & (1ULL << ceIdx))
-					parentLayer.push_back(child->layer[ceIdx]);
-
-			// Sort layer before querying map
-			std::sort(parentLayer.begin(), parentLayer.end());
-			if (!vertices.contains(parentLayer)) continue;
-			Vertex* parent = vertices.at(parentLayer);
-
-			// Add edge
-			parent->children.push_back(child);
-		}
-	}
-#endif
 }
 
 LayerDAG::LayerDAG(uint8_t n_, const std::vector<Network>& allLayers)
@@ -157,9 +131,13 @@ std::vector<Network> LayerDAG::GetUnsaturatedLayers() const
 	return saturated;
 }
 
+void LayerDAG::Reset()
+{
+	ResetVertex(root);
+}
+
 void LayerDAG::PropagateOutputs(const std::unordered_set<uint64_t>& outputs)
 {
-	ClearOutputs(root);
 	root->outputs = outputs;
 	for (Vertex* child : root->children)
 		PropagateOutputs(child, root);
@@ -246,11 +224,14 @@ LayerDAG::Vertex* LayerDAG::AddCE(Vertex* parent, CE ce) const
 	return child;
 }
 
-void LayerDAG::ClearOutputs(Vertex* vertex)
+void LayerDAG::ResetVertex(Vertex* vertex)
 {
 	vertex->outputs.clear();
+	vertex->redundant = false;
+	vertex->childSubset = false;
+
 	for (Vertex* child : vertex->children)
-		ClearOutputs(child);
+		ResetVertex(child);
 }
 
 static inline std::set<CE> NetworkDifference(const Network& a, const Network& b)

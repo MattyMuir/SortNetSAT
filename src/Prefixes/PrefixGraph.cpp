@@ -4,11 +4,11 @@
 #include <fstream>
 #include <set>
 #include <ranges>
-#include <ranges>
 
 #include "../Timer.h"
 #include "NetworkGraph.h"
 #include "KosarajuSolver.h"
+#include "GraphvizSerializer.h"
 
 PrefixGraph::PrefixGraph(uint8_t n_, bool symmetric_)
 	: n(n_), symmetric(symmetric_) {}
@@ -46,6 +46,9 @@ void PrefixGraph::AddEquivalenceEdges()
 		const Prefix& prefix = idxToPrefix[idx];
 		auto [it, inserted] = equivalenceClasses.try_emplace(NetworkGraph{ prefix, n }, std::vector<size_t>{ idx });
 		if (!inserted) it->second.push_back(idx);
+
+		if (idx % 100 == 0)
+			std::print("equivalence: {:.3f}%\r", (double)idx / idxToVertex.size() * 100.0);
 	}
 
 	// Add a cycle through all vertices of the class to make them an SCC
@@ -82,7 +85,7 @@ void PrefixGraph::AddOutputEdges()
 	STOP_LOG(addOutputEdges);
 }
 
-std::vector<Network> PrefixGraph::GetRepresentatives() const
+std::vector<PrefixGraph::Prefix> PrefixGraph::GetRepresentatives() const
 {
 	TIMER(getRepresentatives);
 	// Extract strongly-connected components from the graph
@@ -103,13 +106,13 @@ std::vector<Network> PrefixGraph::GetRepresentatives() const
 				hasIncoming[idxToComponent[outChild->idx]] = true;
 
 	// Take one representative from each SCC with no incoming edges
-	std::vector<Network> representatives;
+	std::vector<Prefix> representatives;
 	for (size_t sccIdx = 0; sccIdx < sccs.size(); sccIdx++)
 	{
 		if (hasIncoming[sccIdx]) continue;
 		size_t representativeIdx = *sccs[sccIdx].begin();
 		const Prefix& prefix = idxToPrefix[representativeIdx];
-		representatives.push_back(Concatenate(prefix));
+		representatives.push_back(prefix);
 	}
 
 	STOP_LOG(getRepresentatives);
@@ -118,22 +121,8 @@ std::vector<Network> PrefixGraph::GetRepresentatives() const
 
 void PrefixGraph::SaveGraphviz(const std::string& filepath) const
 {
-	// Write header
-	std::ofstream file{ filepath };
-	file << "digraph G {\n";
-
-	// Save edges
-	for (Vertex* v0 : idxToVertex)
-	{
-		std::string v0Str = std::format("\"{}\"", idxToPrefix[v0->idx].back());
-		for (Vertex* v1 : v0->outgoing)
-		{
-			std::string v1Str = std::format("\"{}\"", idxToPrefix[v1->idx].back());
-			file << std::format("{} -> {}\n", v0Str, v1Str);
-		}
-	}
-
-	file << "}";
+	GraphvizSerializer serializer{ *this, filepath };
+	serializer.Serialize();
 }
 
 static inline std::set<CE> NetworkDifference(const Network& a, const Network& b)
@@ -306,5 +295,5 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex, const OutputSet& outputs)
 
 	vertex->doneOutputEdges = true;
 	if (++numVerticesProcessed % 100 == 0)
-		std::print("{:.3f}%\r", (double)numVerticesProcessed / idxToVertex.size() * 100.0);
+		std::print("outputs: {:.3f}%\r", (double)numVerticesProcessed / idxToVertex.size() * 100.0);
 }

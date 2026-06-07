@@ -28,7 +28,7 @@ public:
 	void AddEquivalenceEdges();
 	void AddOutputEdges();
 
-	std::vector<Network> GetRepresentatives() const;
+	std::vector<Prefix> GetRepresentatives() const;
 
 	void SaveGraphviz(const std::string& filepath) const;
 
@@ -51,4 +51,5 @@ protected:
 	void AddOutputEdges(Vertex* vertex, const OutputSet& outputs);
 
 	friend class KosarajuSolver;
+	friend class GraphvizSerializer;
 };

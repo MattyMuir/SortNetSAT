@@ -1,5 +1,6 @@
 #include "prefixes.h"
 
+#include <print>
 #include <random>
 #include <bit>
 #include <ranges>
@@ -130,4 +131,37 @@ std::vector<Network> ParsePrefixFile(const std::string& filepath)
 		prefixes.push_back(ParseNetwork(line));
 
 	return prefixes;
+}
+
+std::vector<Network> SortByNumOutputs(const std::vector<Network>& networks, bool symmetric)
+{
+	// Score each prefixes by its number of outputs
+	std::vector<std::pair<Network, size_t>> scoredPrefixes;
+	for (size_t i = 0; i < networks.size(); i++)
+	{
+		const Network& prefix = networks[i];
+		size_t numOutputs = GetOutputs(prefix, 18, true, symmetric).size();
+		scoredPrefixes.emplace_back(prefix, numOutputs);
+
+		if (i % 100 == 0)
+			std::print("{:.3f}%\r", (double)i / networks.size() * 100.0);
+	}
+	std::println("100.000%");
+
+	// Sort prefixes by number of outputs
+	std::sort(scoredPrefixes.begin(), scoredPrefixes.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+
+	// Flatted scoredPrefixes to remove scores
+	std::vector<Network> sortedPrefixes;
+	for (const auto& [prefix, _] : scoredPrefixes)
+		sortedPrefixes.push_back(prefix);
+
+	return sortedPrefixes;
+}
+
+void SavePrefixFile(const std::string& filepath, const std::vector<Network>& prefixes)
+{
+	std::ofstream file{ filepath };
+	for (const Network& prefix : prefixes)
+		file << std::format("{}\n", prefix);
 }

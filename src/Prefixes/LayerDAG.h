@@ -30,6 +30,7 @@ public:
 	std::vector<Network> GetSaturatedLayers() const;
 	std::vector<Network> GetUnsaturatedLayers() const;
 
+	void Reset();
 	void PropagateOutputs(const std::unordered_set<uint64_t>& outputs);
 	void FindRedundant();
 	void FindChildSubsets();
@@ -48,9 +49,9 @@ protected:
 	bool CanAddCE(uint64_t usedChannels, CE ce) const;
 	Network AddCE(const Network& layer, CE ce) const;
 	Vertex* AddCE(Vertex* parent, CE ce) const;
+	static void ResetVertex(Vertex* vertex);
 
 	// Output propagation
-	static void ClearOutputs(Vertex* vertex);
 	static void PropagateOutputs(Vertex* vertex, Vertex* parent);
 
 	// Vertex properties

@@ -13,6 +13,8 @@ public:
 	bool operator<(const NetworkGraph& other) const;
 	bool operator==(const NetworkGraph& other) const;
 
+	uint32_t GetHash() const;
+
 protected:
 	bliss::Digraph* graph;
 };
