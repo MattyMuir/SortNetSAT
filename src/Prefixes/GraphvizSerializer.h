@@ -19,7 +19,7 @@ protected:
 public:
 	GraphvizSerializer(const PrefixGraph& graph_, const std::string& filename);
 
-	void Serialize();
+	void Serialize(bool vertexColors, bool edgeColors);
 
 protected:
 	const PrefixGraph& graph;
@@ -31,4 +31,5 @@ protected:
 	static RGB RandomColor();
 	static std::string ToHex(RGB color);
 	RGB GetPrefixColor(const std::vector<Network>& prefix);
+	RGB GetVertexColor(size_t idx);
 };

@@ -4,7 +4,7 @@
 
 #include <sortnetutils.h>
 
-#include "OutputSet.h"
+#include "IsomorphicOutputSet.h"
 
 class PrefixGraph
 {
@@ -18,6 +18,13 @@ protected:
 		std::vector<Vertex*> incoming, outgoing;
 	};
 
+	enum EdgeType
+	{
+		IsoOutputsEdge,
+		SubsetEdge,
+		OutputEdge
+	};
+
 public:
 	PrefixGraph(uint8_t n_, bool symmetric_);
 	PrefixGraph(const PrefixGraph& other) = delete;
@@ -25,7 +32,8 @@ public:
 	~PrefixGraph();
 
 	void AddPrefix(const Prefix& prefix);
-	void AddEquivalenceEdges();
+	void AddIsomorphicOutputsEdges();
+	void AddSubsetEdges();
 	void AddOutputEdges();
 
 	std::vector<Prefix> GetRepresentatives() const;
@@ -40,15 +48,15 @@ protected:
 	std::map<Prefix, size_t> prefixToIdx;
 	std::vector<Vertex*> idxToVertex;
 	std::vector<Prefix> idxToPrefix;
+	std::map<std::pair<size_t, size_t>, EdgeType> edgeTypes;
 	size_t numVerticesProcessed = 0;
 
-	void AddEdge(Vertex* a, Vertex* b);
-	OutputSet SwapChannels(const OutputSet& outputs, uint8_t i, uint8_t j);
+	void AddEdge(Vertex* a, Vertex* b, EdgeType type);
+	void IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads);
 	std::vector<std::pair<Vertex*, CE>> GetExtensions(Vertex* vertex) const;
-	OutputSet ReduceSet(const OutputSet& outputs, CE ce) const;
-	OutputSet ReduceSetUnsym(const OutputSet& outputs, CE ce) const;
-	OutputSet ReduceSetSym(const OutputSet& outputs, CE ce) const;
-	void AddOutputEdges(Vertex* vertex, const OutputSet& outputs);
+	void ApplyCE(FactoredOutputSet& outputs, CE ce) const;
+	void SwapBits(FactoredOutputSet& outputs, CE ce) const;
+	void AddOutputEdges(Vertex* vertex, const FactoredOutputSet& outputs);
 
 	friend class KosarajuSolver;
 	friend class GraphvizSerializer;

@@ -87,7 +87,7 @@ Network GreedyPrefix(uint8_t n, uint8_t d, bool symmetric)
 			for (CE ce : alphabet)
 			{
 				prefix.push_back(ce);
-				uint64_t numOutputs = GetOutputs(prefix, n, true, symmetric).size();
+				uint64_t numOutputs = GetOutputs(prefix, n, true, symmetric).Size();
 				prefix.pop_back();
 
 				if (numOutputs > fewestRemaining) continue;
@@ -140,7 +140,7 @@ std::vector<Network> SortByNumOutputs(const std::vector<Network>& networks, bool
 	for (size_t i = 0; i < networks.size(); i++)
 	{
 		const Network& prefix = networks[i];
-		size_t numOutputs = GetOutputs(prefix, 18, true, symmetric).size();
+		size_t numOutputs = GetOutputs(prefix, 18, true, symmetric).Size();
 		scoredPrefixes.emplace_back(prefix, numOutputs);
 
 		if (i % 100 == 0)

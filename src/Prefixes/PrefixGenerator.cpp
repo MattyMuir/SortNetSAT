@@ -58,8 +58,10 @@ void PrefixGenerator::Generate()
 void PrefixGenerator::Prune()
 {
 	R.clear();
-	for (const NetworkOutputs& prefix : N)
+	for (size_t prefixIdx = 0; prefixIdx < N.size(); prefixIdx++)
 	{
+		const NetworkOutputs& prefix = N[prefixIdx];
+
 		// Skip if 'prefix' is subsumed by another prefix already in R
 		bool subsumed = false;
 		for (const NetworkOutputs& other : R)
@@ -71,6 +73,8 @@ void PrefixGenerator::Prune()
 
 		// Add to R
 		R.push_back(prefix);
+
+		std::print("Progress: {:.3f}%\r", (double)prefixIdx / N.size() * 100.0);
 	}
 }
 

@@ -41,11 +41,14 @@ std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 			}
 		}
 
-		// Construct subsumption edges and get representatives
-		graph.AddEquivalenceEdges();
-		graph.AddOutputEdges();
-		graph.SaveGraphviz(std::format("graph_{}_{}_d{}.gv", n, symmetric ? "sym" : "unsym", k + 1));
+		// Determine inextendible implication edges
+		graph.AddIsomorphicOutputsEdges();
+		//graph.AddSubsetEdges();
+		//graph.AddOutputEdges();
+
+		// Get all representatives
 		allPrefixes = graph.GetRepresentatives();
+		std::println("Number of {}-layer prefixes: {}", k + 1, allPrefixes.size());
 	}
 
 	// Convert layer-based prefixes to regular networks

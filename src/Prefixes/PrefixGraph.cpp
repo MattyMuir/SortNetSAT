@@ -4,9 +4,9 @@
 #include <fstream>
 #include <set>
 #include <ranges>
+#include <thread>
 
 #include "../Timer.h"
-#include "NetworkGraph.h"
 #include "KosarajuSolver.h"
 #include "GraphvizSerializer.h"
 
@@ -36,33 +36,103 @@ void PrefixGraph::AddPrefix(const Prefix& prefix)
 	idxToPrefix.push_back(sortedPrefix);
 }
 
-void PrefixGraph::AddEquivalenceEdges()
+void PrefixGraph::AddIsomorphicOutputsEdges()
 {
-	TIMER(equivalence);
-	// Determine equivalence classes
-	std::map<NetworkGraph, std::vector<size_t>> equivalenceClasses;
+	TIMER(addIsomorphicOutputsEdges);
+#if 0
+	// Insert all prefixes into the IsomorphicOutputSet to find
+	// all prefixes with equivalent outputs under permutation
+	IsomorphicOutputSet isoOutputsSet{ n };
 	for (size_t idx = 0; idx < nextVertexIdx; idx++)
 	{
-		const Prefix& prefix = idxToPrefix[idx];
-		auto [it, inserted] = equivalenceClasses.try_emplace(NetworkGraph{ prefix, n }, std::vector<size_t>{ idx });
-		if (!inserted) it->second.push_back(idx);
+		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
 
-		if (idx % 100 == 0)
-			std::print("equivalence: {:.3f}%\r", (double)idx / idxToVertex.size() * 100.0);
+		if (idx % 10 == 0)
+			std::print("isomorphicOutputs: {:.3f}%\r", (double)idx / nextVertexIdx * 100.0);
 	}
 
+	// Get equivalence classes from the set
+	auto equivalenceClasses = isoOutputsSet.GetEquivalenceClasses();
+#else
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<IsomorphicOutputSet> outputSets;
+	std::vector<double> progress(numThreads);
+	for (size_t i = 0; i < numThreads; i++)
+		outputSets.emplace_back(n);
+
+	std::vector<std::thread> threads;
+	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
+	{
+		threads.emplace_back([this, threadIdx, numThreads, &outputSets, &progress]()
+			{
+				IsomorphicOutputsStrided(outputSets[threadIdx], progress[threadIdx], threadIdx, numThreads);
+			});
+	}
+
+	for (;;)
+	{
+		if (progress[0] == 1.0) break;
+		std::print("isomorphicOutputs {:.3f}%\r", progress[0] * 100.0);
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
+	}
+	
+	for (auto& thread : threads) thread.join();
+
+	std::println("Merging!");
+	for (size_t i = 1; i < numThreads; i++)
+		outputSets[0].Merge(std::move(outputSets[i]));
+
+	// Get equivalence classes from the set
+	auto equivalenceClasses = outputSets[0].GetEquivalenceClasses();
+#endif
+
 	// Add a cycle through all vertices of the class to make them an SCC
-	for (const auto& [_, equivalenceClass] : equivalenceClasses)
+	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
 	{
 		if (equivalenceClass.size() == 1) continue;
 		for (size_t i = 0; i < equivalenceClass.size(); i++)
 		{
 			size_t idx1 = equivalenceClass[i];
 			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
-			AddEdge(idxToVertex[idx1], idxToVertex[idx2]);
+			AddEdge(idxToVertex[idx1], idxToVertex[idx2], IsoOutputsEdge);
 		}
 	}
-	STOP_LOG(equivalence);
+	STOP_LOG(addIsomorphicOutputsEdges);
+}
+
+static inline bool IsSubset(const OutputSet& a, const OutputSet& b)
+{
+	if (a.Size() >= b.Size()) return false;
+	for (uint64_t x : a)
+		if (!b.Contains(x))
+			return false;
+	return true;
+}
+
+void PrefixGraph::AddSubsetEdges()
+{
+	TIMER(addSubsetEdges);
+	size_t numPairs = nextVertexIdx * (nextVertexIdx - 1);
+
+	size_t progress = 0;
+	for (size_t idx1 = 0; idx1 < nextVertexIdx; idx1++)
+	{
+		for (size_t idx2 = 0; idx2 < nextVertexIdx; idx2++)
+		{
+			if (idx1 == idx2) continue;
+
+			OutputSet outputs1 = GetOutputs(Concatenate(idxToPrefix[idx1]), n);
+			OutputSet outputs2 = GetOutputs(Concatenate(idxToPrefix[idx2]), n);
+
+			if (outputs1 == outputs2 || IsSubset(outputs1, outputs2))
+				AddEdge(idxToVertex[idx1], idxToVertex[idx2], SubsetEdge);
+
+			progress++;
+			if (progress % 1000 == 0)
+				std::print("subsetEdges: {:.3f}%\r", (double)progress / numPairs * 100.0);
+		}
+	}
+	STOP_LOG(addSubsetEdges);
 }
 
 void PrefixGraph::AddOutputEdges()
@@ -75,9 +145,7 @@ void PrefixGraph::AddOutputEdges()
 		if (!prefix.back().empty()) continue;
 
 		// Compute outputs from scratch
-		auto outputsVec = GetOutputs(Concatenate(prefix), n);
-		OutputSet outputs{ n };
-		outputs = std::move(outputsVec);
+		FactoredOutputSet outputs{ Concatenate(prefix), n };
 
 		// DFS into all children
 		AddOutputEdges(vertex, outputs);
@@ -122,7 +190,7 @@ std::vector<PrefixGraph::Prefix> PrefixGraph::GetRepresentatives() const
 void PrefixGraph::SaveGraphviz(const std::string& filepath) const
 {
 	GraphvizSerializer serializer{ *this, filepath };
-	serializer.Serialize();
+	serializer.Serialize(true, true);
 }
 
 static inline std::set<CE> NetworkDifference(const Network& a, const Network& b)
@@ -133,34 +201,23 @@ static inline std::set<CE> NetworkDifference(const Network& a, const Network& b)
 	return aCEs;
 }
 
-void PrefixGraph::AddEdge(Vertex* a, Vertex* b)
+void PrefixGraph::AddEdge(Vertex* a, Vertex* b, EdgeType type)
 {
+	if (edgeTypes.contains({ a->idx, b->idx })) return;
+
+	edgeTypes.emplace(std::pair<size_t, size_t>{ a->idx, b->idx }, type);
 	a->outgoing.push_back(b);
 	b->incoming.push_back(a);
 }
 
-OutputSet PrefixGraph::SwapChannels(const OutputSet& outputs, uint8_t i, uint8_t j)
+void PrefixGraph::IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads)
 {
-	uint64_t leftMask = 1ULL << i;
-	uint64_t rightMask = 1ULL << j;
-	if (symmetric)
+	for (size_t idx = threadIdx; idx < nextVertexIdx; idx += numThreads)
 	{
-		leftMask |= 1ULL << (n - 1 - j);
-		rightMask |= 1ULL << (n - 1 - i);
+		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
+		progress = (double)idx / nextVertexIdx;
 	}
-	uint64_t stationaryMask = ~(leftMask | rightMask);
-	uint64_t shift = j - i;
-
-	OutputSet flippedOutputs{ n, outputs.Size() };
-	for (uint64_t output : outputs)
-	{
-		output = (output & stationaryMask)
-			| (output & leftMask) << shift
-			| (output & rightMask) >> shift;
-		flippedOutputs.Insert(output);
-	}
-
-	return flippedOutputs;
+	progress = 1.0;
 }
 
 std::vector<std::pair<PrefixGraph::Vertex*, CE>> PrefixGraph::GetExtensions(Vertex* vertex) const
@@ -201,92 +258,56 @@ std::vector<std::pair<PrefixGraph::Vertex*, CE>> PrefixGraph::GetExtensions(Vert
 	return extendedVertices;
 }
 
-OutputSet PrefixGraph::ReduceSet(const OutputSet& outputs, CE ce) const
+void PrefixGraph::ApplyCE(FactoredOutputSet& outputs, CE ce) const
 {
-	if (!symmetric || ce.lo == (n - 1 - ce.hi))
-		return ReduceSetUnsym(outputs, ce);
-
-	return ReduceSetSym(outputs, ce);
+	outputs.ApplyCE(ce.lo, ce.hi);
+	if (symmetric && ce.lo != (n - 1 - ce.hi))
+		outputs.ApplyCE(n - 1 - ce.hi, n - 1 - ce.lo);
 }
 
-OutputSet PrefixGraph::ReduceSetUnsym(const OutputSet& outputs, CE ce) const
+void PrefixGraph::SwapBits(FactoredOutputSet& outputs, CE ce) const
 {
-	uint64_t loMask = (1ULL << ce.lo);
-	uint64_t hiMask = (1ULL << ce.hi);
-	uint64_t ceMask = loMask | hiMask;
-
-	OutputSet reducedOutputs{ n };
-	for (uint64_t output : outputs)
-	{
-		if ((output & loMask) && (~output & hiMask))
-			output ^= ceMask;
-		reducedOutputs.Insert(output);
-	}
-
-	return reducedOutputs;
+	outputs.SwapBits(ce.lo, ce.hi);
+	if (symmetric && ce.lo != (n - 1 - ce.hi))
+		outputs.SwapBits(n - 1 - ce.hi, n - 1 - ce.lo);
 }
 
-OutputSet PrefixGraph::ReduceSetSym(const OutputSet& outputs, CE ce) const
-{
-	uint64_t loMask1 = (1ULL << ce.lo);
-	uint64_t hiMask1 = (1ULL << ce.hi);
-	uint64_t ceMask1 = loMask1 | hiMask1;
-
-	uint64_t loMask2 = (1ULL << (n - 1 - ce.hi));
-	uint64_t hiMask2 = (1ULL << (n - 1 - ce.lo));
-	uint64_t ceMask2 = loMask2 | hiMask2;
-
-	OutputSet reducedOutputs{ n };
-	for (uint64_t output : outputs)
-	{
-		if ((output & loMask1) && (~output & hiMask1))
-			output ^= ceMask1;
-		if ((output & loMask2) && (~output & hiMask2))
-			output ^= ceMask2;
-		reducedOutputs.Insert(output);
-	}
-
-	return reducedOutputs;
-}
-
-static inline bool IsSubset(const OutputSet& a, const OutputSet& b)
-{
-	if (a.Size() >= b.Size()) return false;
-	for (uint64_t x : a)
-		if (!b.Contains(x))
-			return false;
-	return true;
-}
-
-void PrefixGraph::AddOutputEdges(Vertex* vertex, const OutputSet& outputs)
+void PrefixGraph::AddOutputEdges(Vertex* vertex, const FactoredOutputSet& outputs)
 {
 	if (vertex->doneOutputEdges) return;
 
 	auto extendedVertices = GetExtensions(vertex);
+	OutputSet outputSet{ outputs };
 
 	for (auto [extVertex, addedCE] : extendedVertices)
 	{
-		OutputSet extOutputs = ReduceSet(outputs, addedCE);
-		if (outputs == extOutputs) // Check for identical outputs
+		FactoredOutputSet extOutputs{ outputs };
+		ApplyCE(extOutputs, addedCE);
+		OutputSet extOutputSet{ extOutputs };
+
+		if (outputSet == extOutputSet) // Check for identical outputs
 		{
-			AddEdge(vertex, extVertex);
-			AddEdge(extVertex, vertex);
+			AddEdge(vertex, extVertex, OutputEdge);
+			AddEdge(extVertex, vertex, OutputEdge);
 		}
-		else if (IsSubset(extOutputs, outputs)) // Check for output subset
+		else if (IsSubset(extOutputSet, outputSet)) // Check for output subset
 		{
-			AddEdge(extVertex, vertex);
+			AddEdge(extVertex, vertex, OutputEdge);
 		}
 		else // Try adding the comparator upside-down
 		{
-			OutputSet flippedOutputs = SwapChannels(extOutputs, addedCE.lo, addedCE.hi);
-			if (outputs == flippedOutputs) // Check for identical outputs
+			FactoredOutputSet flippedOutputs{ extOutputs };
+			SwapBits(flippedOutputs, addedCE);
+			OutputSet flippedOutputSet{ flippedOutputs };
+
+			if (outputSet == flippedOutputSet) // Check for identical outputs
 			{
-				AddEdge(vertex, extVertex);
-				AddEdge(extVertex, vertex);
+				AddEdge(vertex, extVertex, OutputEdge);
+				AddEdge(extVertex, vertex, OutputEdge);
 			}
-			else if (IsSubset(flippedOutputs, outputs)) // Check for output subset
+			else if (IsSubset(flippedOutputSet, outputSet)) // Check for output subset
 			{
-				AddEdge(extVertex, vertex);
+				AddEdge(extVertex, vertex, OutputEdge);
 			}
 		}
 

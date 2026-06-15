@@ -13,6 +13,7 @@
 #include "Prefixes/PrefixGeneratorV3.h"
 #include "Prefixes/LayerDAG.h"
 #include "Prefixes/WindowMinimizer.h"
+#include "Prefixes/OutputGraph.h"
 
 void FractionBenchmark()
 {
@@ -120,12 +121,34 @@ void GenerateCactusPlot()
 	for (double t : times) std::println("{:.3f}", t);
 }
 
+Network RandomNetwork(uint8_t n, size_t size)
+{
+	std::vector<CE> alphabet;
+	for (uint8_t i = 0; i + 1 < n; i++)
+		for (uint8_t j = i + 1; j < n; j++)
+			alphabet.push_back({ i, j });
+
+	static std::mt19937_64 gen{ std::random_device{}() };
+	std::uniform_int_distribution<size_t> dist{ 0, alphabet.size() - 1 };
+
+	Network network;
+	for (size_t i = 0; i < size; i++)
+		network.push_back(alphabet[dist(gen)]);
+
+	return network;
+}
+
+bool IsIsomorphic(const OutputSet& a, const OutputSet& b, uint8_t n)
+{
+	OutputGraph graph1{ a, n };
+	OutputGraph graph2{ b, n };
+	return graph1 == graph2;
+}
+
 int main()
 {
-	for (size_t i = 0; i < 10; i++)
-	{
-		PrefixGeneratorV2 generator{ 8, 2, true };
-		auto allPrefixes = generator.GeneratePrefixes();
-		//std::println("{}", allPrefixes.size());
-	}
+	PrefixGeneratorV3 generator{ 14, 2, true };
+	auto allPrefixes = generator.GeneratePrefixes();
+
+	SavePrefixFile("poop.txt", allPrefixes);
 }

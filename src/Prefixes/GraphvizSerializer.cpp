@@ -8,7 +8,7 @@
 GraphvizSerializer::GraphvizSerializer(const PrefixGraph& graph_, const std::string& filename)
 	: graph(graph_), file(filename) {}
 
-void GraphvizSerializer::Serialize()
+void GraphvizSerializer::Serialize(bool vertexColors, bool edgeColors)
 {
 	// Write header
 	file << "digraph G {\n";
@@ -17,18 +17,30 @@ void GraphvizSerializer::Serialize()
     WriteVertexLabels();
 
     // Vertex colors
-    for (size_t idx = 0; idx < graph.nextVertexIdx; idx++)
-    {
-        const PrefixGraph::Prefix& fullPrefix = graph.idxToPrefix[idx];
-        std::vector<Network> prefix{ fullPrefix.begin(), fullPrefix.begin() + fullPrefix.size() - 1 };
-        RGB color = GetPrefixColor(prefix);
-        file << std::format("v{} [style=filled fillcolor=\"{}\"]\n", idx, ToHex(color));
-    }
+    if (vertexColors)
+        for (size_t idx = 0; idx < graph.nextVertexIdx; idx++)
+            file << std::format("v{} [style=filled fillcolor=\"{}\"]\n", idx, ToHex(GetVertexColor(idx)));
 
 	// Save edges
-	for (PrefixGraph::Vertex* v0 : graph.idxToVertex)
-		for (PrefixGraph::Vertex* v1 : v0->outgoing)
-			file << std::format("v{} -> v{}\n", v0->idx, v1->idx);
+    for (PrefixGraph::Vertex* v0 : graph.idxToVertex)
+    {
+        for (PrefixGraph::Vertex* v1 : v0->outgoing)
+        {
+            const char* color = "black";
+            if (edgeColors)
+            {
+                PrefixGraph::EdgeType edgeType = graph.edgeTypes.at({ v0->idx, v1->idx });
+                switch (edgeType)
+                {
+                break; case PrefixGraph::IsoOutputsEdge:    color = "blue";
+                break; case PrefixGraph::SubsetEdge:        color = "red";
+                break; case PrefixGraph::OutputEdge:        color = "green";
+                }
+            }
+
+            file << std::format("v{} -> v{} [color=\"{}\"]\n", v0->idx, v1->idx, color);
+        }
+    }
 
     // Write footer
 	file << "}";
@@ -124,4 +136,15 @@ GraphvizSerializer::RGB GraphvizSerializer::GetPrefixColor(const std::vector<Net
 	if (!prefixColors.contains(prefix))
 		prefixColors.emplace(prefix, RandomColor());
 	return prefixColors.at(prefix);
+}
+
+GraphvizSerializer::RGB GraphvizSerializer::GetVertexColor(size_t idx)
+{
+#if 1
+    const PrefixGraph::Prefix& fullPrefix = graph.idxToPrefix[idx];
+    std::vector<Network> prefix{ fullPrefix.begin(), fullPrefix.begin() + fullPrefix.size() - 1 };
+    return GetPrefixColor(prefix);
+#else
+
+#endif
 }

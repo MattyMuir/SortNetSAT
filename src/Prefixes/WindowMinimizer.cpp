@@ -46,7 +46,7 @@ void WindowMinimizer::AddToPopulation(Population& population, const Network& pre
 {
 	Permutation perm{
 		std::vector<uint8_t>(n),
-		GetOutputs(prefix, n, false, false)
+		FactoredOutputSet{ prefix, n }.ToVector()
 	};
 	std::iota(perm.perm.begin(), perm.perm.end(), 0);
 	AddToPopulation(population, perm);
