@@ -12,6 +12,7 @@ OutputGraph::OutputGraph(const OutputSet& outputs, uint8_t n)
 
 	// Create bit vertices
 	std::vector<uint32_t> bitVertices;
+	bitVertices.reserve(n);
 	for (uint8_t bi = 0; bi < n; bi++)
 		bitVertices.push_back(g.add_vertex(VertexBit));
 
@@ -41,6 +42,7 @@ OutputGraph& OutputGraph::operator=(OutputGraph&& other) noexcept
 	delete graph;
 	graph = other.graph;
 	other.graph = nullptr;
+	return *this;
 }
 
 OutputGraph::~OutputGraph()

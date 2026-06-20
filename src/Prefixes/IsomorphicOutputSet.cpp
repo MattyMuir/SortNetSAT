@@ -30,7 +30,7 @@ IsomorphicOutputSet::IsomorphicOutputSet(uint8_t n_)
 void IsomorphicOutputSet::Insert(const Network& prefix, size_t idx)
 {
 	// Initialize the key object
-	OutputsKey key{ n, prefix };
+	OutputsKey key{ n, prefix, 0, std::nullopt };
 	key.ComputeGraph();
 	key.hash = key.graph->GetHash();
 
@@ -47,20 +47,31 @@ void IsomorphicOutputSet::Insert(const Network& prefix, size_t idx)
 void IsomorphicOutputSet::Merge(IsomorphicOutputSet&& other)
 {
 	size_t numMerged = 0;
-	for (auto& [key, vec] : other.map)
+	while (!other.map.empty())
 	{
-		auto [it, inserted] = map.try_emplace(std::move(const_cast<OutputsKey&>(key)), std::move(vec));
-		if (!inserted) it->second.insert(it->second.end(),
-			std::make_move_iterator(vec.begin()),
-			std::make_move_iterator(vec.end()));
+		// Extract the node from the other set
+		auto node = other.map.extract(other.map.begin());
+		std::vector<size_t> eqClass{ node.mapped() };
 
-		//ForgetGraphs();
+		// Insert the node into this map
+		// If the key already exists, concatenate the equivalence classes
+		auto insertResult = map.insert(std::move(node));
+		if (!insertResult.inserted)
+		{
+			std::vector<size_t>& srcClass = insertResult.position->second;
+			srcClass.insert(srcClass.end(), eqClass.begin(), eqClass.end());
+		}
+
+		// Forget the graphs in this map
+		if (++numMerged % 10 == 0)
+			ForgetGraphs();
 	}
 }
 
 std::vector<std::vector<size_t>> IsomorphicOutputSet::GetEquivalenceClasses() const
 {
 	std::vector<std::vector<size_t>> equivalenceClasses;
+	equivalenceClasses.reserve(map.size());
 	for (const auto& [_, eqClass] : map)
 		equivalenceClasses.push_back(eqClass);
 	return equivalenceClasses;

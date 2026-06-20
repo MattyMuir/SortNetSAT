@@ -113,14 +113,6 @@ Network GreedyPrefix(uint8_t n, uint8_t d, bool symmetric)
 	return prefix;
 }
 
-static inline std::vector<std::string> Split(std::string_view str, std::string_view delim)
-{
-	std::vector<std::string> parts;
-	for (const auto& part : std::views::split(str, delim))
-		parts.emplace_back(part.begin(), part.end());
-	return parts;
-}
-
 std::vector<Network> ParsePrefixFile(const std::string& filepath)
 {
 	std::vector<Network> prefixes;
@@ -151,8 +143,9 @@ std::vector<Network> SortByNumOutputs(const std::vector<Network>& networks, bool
 	// Sort prefixes by number of outputs
 	std::sort(scoredPrefixes.begin(), scoredPrefixes.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
 
-	// Flatted scoredPrefixes to remove scores
+	// Flatten scoredPrefixes to remove scores
 	std::vector<Network> sortedPrefixes;
+	sortedPrefixes.reserve(scoredPrefixes.size());
 	for (const auto& [prefix, _] : scoredPrefixes)
 		sortedPrefixes.push_back(prefix);
 

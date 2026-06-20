@@ -33,8 +33,8 @@ protected:
 	bool CanAddCE(const Network& layer, CE ce) const;
 	void AddCEInplace(Network& layer, CE ce) const;
 	Network AddCE(const Network& layer, CE ce) const;
-	void ReduceOutputs(std::unordered_set<uint64_t>& outputs, CE ce) const;
-	NetworkOutputs AddLayer(const NetworkOutputs& network, const Network& layer) const;
+	static void ReduceOutputs(std::unordered_set<uint64_t>& outputs, CE ce);
+	static NetworkOutputs AddLayer(const NetworkOutputs& network, const Network& layer);
 
 	// Sumsumption testing
 	bool CannotSubsume1(const NetworkOutputs& a, const NetworkOutputs& b) const;

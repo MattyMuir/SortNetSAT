@@ -19,7 +19,6 @@ protected:
 
 public:
 	LayerDAG(uint8_t n_, bool symmetric_);
-	LayerDAG(uint8_t n_, const std::vector<Network>& allLayers);
 	LayerDAG(const LayerDAG& other) = delete;
 	LayerDAG(LayerDAG&& other) = delete;
 	~LayerDAG();

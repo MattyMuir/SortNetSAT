@@ -23,7 +23,7 @@ void PrefixGraph::AddPrefix(const Prefix& prefix)
 {
 	// Create new vertex and increment nextVertexIdx
 	size_t idx = nextVertexIdx++;
-	Vertex* vertex = new Vertex{ idx };
+	Vertex* vertex = new Vertex{ idx, false, {}, {} };
 
 	// Sort network to ensure correct map lookup
 	Prefix sortedPrefix{ prefix };
@@ -36,10 +36,9 @@ void PrefixGraph::AddPrefix(const Prefix& prefix)
 	idxToPrefix.push_back(sortedPrefix);
 }
 
-void PrefixGraph::AddIsomorphicOutputsEdges()
+void PrefixGraph::AddIsomorphicOutputsEdgesV1()
 {
 	TIMER(addIsomorphicOutputsEdges);
-#if 0
 	// Insert all prefixes into the IsomorphicOutputSet to find
 	// all prefixes with equivalent outputs under permutation
 	IsomorphicOutputSet isoOutputsSet{ n };
@@ -53,38 +52,6 @@ void PrefixGraph::AddIsomorphicOutputsEdges()
 
 	// Get equivalence classes from the set
 	auto equivalenceClasses = isoOutputsSet.GetEquivalenceClasses();
-#else
-	size_t numThreads = std::thread::hardware_concurrency() - 1;
-	std::vector<IsomorphicOutputSet> outputSets;
-	std::vector<double> progress(numThreads);
-	for (size_t i = 0; i < numThreads; i++)
-		outputSets.emplace_back(n);
-
-	std::vector<std::thread> threads;
-	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
-	{
-		threads.emplace_back([this, threadIdx, numThreads, &outputSets, &progress]()
-			{
-				IsomorphicOutputsStrided(outputSets[threadIdx], progress[threadIdx], threadIdx, numThreads);
-			});
-	}
-
-	for (;;)
-	{
-		if (progress[0] == 1.0) break;
-		std::print("isomorphicOutputs {:.3f}%\r", progress[0] * 100.0);
-		std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
-	}
-	
-	for (auto& thread : threads) thread.join();
-
-	std::println("Merging!");
-	for (size_t i = 1; i < numThreads; i++)
-		outputSets[0].Merge(std::move(outputSets[i]));
-
-	// Get equivalence classes from the set
-	auto equivalenceClasses = outputSets[0].GetEquivalenceClasses();
-#endif
 
 	// Add a cycle through all vertices of the class to make them an SCC
 	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
@@ -100,13 +67,66 @@ void PrefixGraph::AddIsomorphicOutputsEdges()
 	STOP_LOG(addIsomorphicOutputsEdges);
 }
 
-static inline bool IsSubset(const OutputSet& a, const OutputSet& b)
+void PrefixGraph::AddIsomorphicOutputsEdgesV2()
+{
+	TIMER(addIsomorphicOutputsEdges);
+
+	// Reserve storage for each thread's isomorphic output set
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<IsomorphicOutputSet> outputSets;
+	outputSets.reserve(numThreads);
+	for (size_t i = 0; i < numThreads; i++)
+		outputSets.emplace_back(n);
+
+	// Initialize the threads to process strided vertices
+	std::vector<double> progress(numThreads);
+	std::vector<std::thread> threads;
+	threads.reserve(numThreads);
+	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
+	{
+		threads.emplace_back([this, threadIdx, numThreads, &outputSets, &progress]()
+			{
+				IsomorphicOutputsStrided(outputSets[threadIdx], progress[threadIdx], threadIdx, numThreads);
+			});
+	}
+
+	// Log the progress of thread 0
+	for (;;)
+	{
+		if (progress[0] == 1.0) break;
+		std::print("isomorphicOutputs {:.3f}%\r", progress[0] * 100.0);
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
+	}
+
+	for (auto& thread : threads) thread.join();
+
+	// Merge output sets
+	std::println("Merging!");
+	for (size_t i = 1; i < numThreads; i++)
+		outputSets[0].Merge(std::move(outputSets[i]));
+
+	// Get equivalence classes from the set
+	auto equivalenceClasses = outputSets[0].GetEquivalenceClasses();
+
+	// Add a cycle through all vertices of the class to make them an SCC
+	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
+	{
+		if (equivalenceClass.size() == 1) continue;
+		for (size_t i = 0; i < equivalenceClass.size(); i++)
+		{
+			size_t idx1 = equivalenceClass[i];
+			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
+			AddEdge(idxToVertex[idx1], idxToVertex[idx2], IsoOutputsEdge);
+		}
+	}
+	STOP_LOG(addIsomorphicOutputsEdges);
+}
+
+static inline bool StrictSubset(const OutputSet& a, const OutputSet& b)
 {
 	if (a.Size() >= b.Size()) return false;
-	for (uint64_t x : a)
-		if (!b.Contains(x))
-			return false;
-	return true;
+
+	return std::ranges::all_of(a, [&b](uint64_t x) { return b.Contains(x); });
 }
 
 void PrefixGraph::AddSubsetEdges()
@@ -124,7 +144,7 @@ void PrefixGraph::AddSubsetEdges()
 			OutputSet outputs1 = GetOutputs(Concatenate(idxToPrefix[idx1]), n);
 			OutputSet outputs2 = GetOutputs(Concatenate(idxToPrefix[idx2]), n);
 
-			if (outputs1 == outputs2 || IsSubset(outputs1, outputs2))
+			if (outputs1 == outputs2 || StrictSubset(outputs1, outputs2))
 				AddEdge(idxToVertex[idx1], idxToVertex[idx2], SubsetEdge);
 
 			progress++;
@@ -193,14 +213,6 @@ void PrefixGraph::SaveGraphviz(const std::string& filepath) const
 	serializer.Serialize(true, true);
 }
 
-static inline std::set<CE> NetworkDifference(const Network& a, const Network& b)
-{
-	std::set<CE> aCEs;
-	aCEs.insert(a.begin(), a.end());
-	for (CE ce : b) aCEs.erase(ce);
-	return aCEs;
-}
-
 void PrefixGraph::AddEdge(Vertex* a, Vertex* b, EdgeType type)
 {
 	if (edgeTypes.contains({ a->idx, b->idx })) return;
@@ -238,7 +250,7 @@ std::vector<std::pair<PrefixGraph::Vertex*, CE>> PrefixGraph::GetExtensions(Vert
 			// Check if this CE fits in the last layer of the prefix
 			uint64_t ceMask = (1ULL << i) | (1ULL << j);
 			if (symmetric) ceMask |= (1ULL << (n - 1 - j)) | (1ULL << (n - 1 - i));
-			if (usedChannels & ((1ULL << i) | (1ULL << j))) continue;
+			if (usedChannels & ceMask) continue;
 
 			// Create the extended prefix by adding this CE
 			Prefix extPrefix{ prefix };
@@ -290,7 +302,7 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex, const FactoredOutputSet& output
 			AddEdge(vertex, extVertex, OutputEdge);
 			AddEdge(extVertex, vertex, OutputEdge);
 		}
-		else if (IsSubset(extOutputSet, outputSet)) // Check for output subset
+		else if (StrictSubset(extOutputSet, outputSet)) // Check for output subset
 		{
 			AddEdge(extVertex, vertex, OutputEdge);
 		}
@@ -305,7 +317,7 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex, const FactoredOutputSet& output
 				AddEdge(vertex, extVertex, OutputEdge);
 				AddEdge(extVertex, vertex, OutputEdge);
 			}
-			else if (IsSubset(flippedOutputSet, outputSet)) // Check for output subset
+			else if (StrictSubset(flippedOutputSet, outputSet)) // Check for output subset
 			{
 				AddEdge(extVertex, vertex, OutputEdge);
 			}

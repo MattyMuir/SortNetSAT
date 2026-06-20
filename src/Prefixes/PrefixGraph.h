@@ -32,7 +32,9 @@ public:
 	~PrefixGraph();
 
 	void AddPrefix(const Prefix& prefix);
-	void AddIsomorphicOutputsEdges();
+	void AddIsomorphicOutputsEdgesV1();
+	void AddIsomorphicOutputsEdgesV2();
+	void AddIsomorphicOutputsEdgesV3();
 	void AddSubsetEdges();
 	void AddOutputEdges();
 

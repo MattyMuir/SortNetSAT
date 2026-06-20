@@ -111,7 +111,7 @@ void GenerateCactusPlot()
 		IncrementalExtender extender{ n, d, symmetric, prefix };
 		extender.SetParameters(6);
 		Timer t;
-		bool extendable = extender.Extend();
+		extender.Extend();
 		t.Stop();
 		times.push_back(t.GetSeconds());
 	}

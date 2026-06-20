@@ -43,7 +43,9 @@ std::vector<Network> PrefixGenerator::GeneratePrefixes()
 	}
 	
 	std::vector<Network> allPrefixes;
-	for (const NetworkOutputs& network : R) allPrefixes.push_back(network.network);
+	allPrefixes.reserve(R.size());
+	for (const NetworkOutputs& network : R)
+		allPrefixes.push_back(network.network);
 	return allPrefixes;
 }
 
@@ -104,7 +106,7 @@ Network PrefixGenerator::AddCE(const Network& layer, CE ce) const
 	return ret;
 }
 
-void PrefixGenerator::ReduceOutputs(std::unordered_set<uint64_t>& outputs, CE ce) const
+void PrefixGenerator::ReduceOutputs(std::unordered_set<uint64_t>& outputs, CE ce)
 {
 	std::unordered_set<uint64_t> newOutputs;
 	uint64_t ceMask = (1ULL << ce.lo) | (1ULL << ce.hi);
@@ -118,7 +120,7 @@ void PrefixGenerator::ReduceOutputs(std::unordered_set<uint64_t>& outputs, CE ce
 	std::swap(outputs, newOutputs);
 }
 
-PrefixGenerator::NetworkOutputs PrefixGenerator::AddLayer(const NetworkOutputs& network, const Network& layer) const
+PrefixGenerator::NetworkOutputs PrefixGenerator::AddLayer(const NetworkOutputs& network, const Network& layer)
 {
 	NetworkOutputs newNetwork;
 	newNetwork.network = Concatenate(network.network, layer);

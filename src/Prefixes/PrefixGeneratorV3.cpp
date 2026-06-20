@@ -42,9 +42,8 @@ std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 		}
 
 		// Determine inextendible implication edges
-		graph.AddIsomorphicOutputsEdges();
-		//graph.AddSubsetEdges();
-		//graph.AddOutputEdges();
+		graph.AddIsomorphicOutputsEdgesV1();
+		graph.AddOutputEdges();
 
 		// Get all representatives
 		allPrefixes = graph.GetRepresentatives();
@@ -53,6 +52,7 @@ std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 
 	// Convert layer-based prefixes to regular networks
 	std::vector<Network> prefixesConcat;
+	prefixesConcat.reserve(allPrefixes.size());
 	for (const auto& prefix : allPrefixes)
 		prefixesConcat.push_back(Concatenate(prefix));
 	return prefixesConcat;

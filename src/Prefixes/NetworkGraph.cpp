@@ -21,7 +21,7 @@ NetworkGraph::NetworkGraph(const std::vector<Network>& layers, uint8_t n)
 
 	// Create all comparator vertices
 	for (const Network& layer : layers)
-		for (CE ce : layer)
+		for (CE _ : layer)
 			g.add_vertex(VertexComparator);
 
 	// 'channelSources' stores which comparator the value in each channel came from

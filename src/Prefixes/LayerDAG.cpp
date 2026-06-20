@@ -61,9 +61,6 @@ LayerDAG::LayerDAG(uint8_t n_, bool symmetric_)
 	}
 }
 
-LayerDAG::LayerDAG(uint8_t n_, const std::vector<Network>& allLayers)
-{}
-
 LayerDAG::~LayerDAG()
 {
 	std::unordered_set<Vertex*> vertices;
@@ -86,6 +83,7 @@ std::vector<Network> LayerDAG::GetLayers() const
 	CollectVertices(root, vertices);
 
 	std::vector<Network> layers;
+	layers.reserve(vertices.size());
 	for (Vertex* vertex : vertices)
 		layers.push_back(vertex->layer);
 
@@ -295,14 +293,11 @@ void LayerDAG::FindRedundant(Vertex* vertex, Vertex* parent)
 		FindRedundant(child, vertex);
 }
 
-static inline bool Subset(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b)
+static inline bool StrictSubset(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b)
 {
 	if (a.size() >= b.size()) return false;
-	for (uint64_t x : a)
-		if (!b.contains(x))
-			return false;
 
-	return true;
+	return std::ranges::all_of(a, [&b](uint64_t x) { return b.contains(x); });
 }
 
 void LayerDAG::FindChildSubsets(Vertex* vertex)
@@ -310,7 +305,7 @@ void LayerDAG::FindChildSubsets(Vertex* vertex)
 	bool hasSubsetChild = false;
 	for (Vertex* child : vertex->children)
 	{
-		if (Subset(child->outputs, vertex->outputs))
+		if (StrictSubset(child->outputs, vertex->outputs))
 		{
 			hasSubsetChild = true;
 			break;
@@ -336,7 +331,7 @@ void LayerDAG::FindChildSubsets(Vertex* vertex)
 			flippedOutputs.insert(output);
 		}
 
-		if (Subset(flippedOutputs, vertex->outputs))
+		if (StrictSubset(flippedOutputs, vertex->outputs))
 		{
 			hasSubsetChild = true;
 			break;
