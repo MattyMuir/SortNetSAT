@@ -160,7 +160,7 @@ bool IsIsomorphicV2(const OutputSet& outputs1, const OutputSet& outputs2, uint8_
 
 int main()
 {
-	PrefixGeneratorV3 generator{ 14, 2, true };
+	PrefixGeneratorV3 generator{ 18, 2, true };
 	auto allPrefixes = generator.GeneratePrefixes();
 	std::println("Num prefixes: {}", allPrefixes.size());
 }

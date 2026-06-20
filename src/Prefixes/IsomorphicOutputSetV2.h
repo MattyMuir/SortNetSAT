@@ -26,6 +26,7 @@ protected:
 public:
 	IsomorphicOutputSetV2(uint8_t n_);
 	IsomorphicOutputSetV2(const IsomorphicOutputSetV2& other) = delete;
+	IsomorphicOutputSetV2(IsomorphicOutputSetV2&& other) = default;
 
 	void Insert(const Network& prefix, size_t idx);
 	void Merge(const IsomorphicOutputSetV2& other);
@@ -34,4 +35,6 @@ public:
 protected:
 	uint8_t n;
 	std::unordered_map<OutputsKey, std::vector<size_t>, OutputsKeyHasher, OutputsKeyEq> map;
+
+	std::vector<uint8_t> GetCanonicalPermutation(const OutputSet& outputs) const;
 };
