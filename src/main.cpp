@@ -13,7 +13,6 @@
 #include "Prefixes/PrefixGeneratorV3.h"
 #include "Prefixes/LayerDAG.h"
 #include "Prefixes/WindowMinimizer.h"
-#include "Prefixes/OutputGraph.h"
 
 void FractionBenchmark()
 {
@@ -138,29 +137,9 @@ Network RandomNetwork(uint8_t n, size_t size)
 	return network;
 }
 
-bool IsIsomorphic(const OutputSet& a, const OutputSet& b, uint8_t n)
-{
-	OutputGraph graph1{ a, n };
-	OutputGraph graph2{ b, n };
-	return graph1 == graph2;
-}
-
-bool IsIsomorphicV2(const OutputSet& outputs1, const OutputSet& outputs2, uint8_t n)
-{
-	OutputGraph graph1{ outputs1, n };
-	OutputGraph graph2{ outputs2, n };
-
-	auto perm1 = graph1.GetPerm();
-	auto perm2 = graph2.GetPerm();
-
-	OutputSet outputs1Canonical = Permute(outputs1, InvertPerm(perm1));
-	OutputSet outputs2Canonical = Permute(outputs2, InvertPerm(perm2));
-	return outputs1Canonical == outputs2Canonical;
-}
-
 int main()
 {
-	PrefixGeneratorV3 generator{ 18, 2, true };
+	PrefixGeneratorV3 generator{ 16, 2, true };
 	auto allPrefixes = generator.GeneratePrefixes();
 	std::println("Num prefixes: {}", allPrefixes.size());
 }

@@ -5,7 +5,6 @@
 #include <sortnetutils.h>
 
 #include "IsomorphicOutputSet.h"
-#include "IsomorphicOutputSetV2.h"
 
 class PrefixGraph
 {
@@ -33,10 +32,7 @@ public:
 	~PrefixGraph();
 
 	void AddPrefix(const Prefix& prefix);
-	void AddIsomorphicOutputsEdgesV1();
-	void AddIsomorphicOutputsEdgesV2();
-	void AddIsomorphicOutputsEdgesV3();
-	void AddIsomorphicOutputsEdgesV4();
+	void AddIsomorphicOutputsEdges();
 	void AddSubsetEdges();
 	void AddOutputEdges();
 
@@ -57,7 +53,6 @@ protected:
 
 	void AddEdge(Vertex* a, Vertex* b, EdgeType type);
 	void IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads);
-	void IsomorphicOutputsStridedV2(IsomorphicOutputSetV2& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads);
 	std::vector<std::pair<Vertex*, CE>> GetExtensions(Vertex* vertex) const;
 	void ApplyCE(FactoredOutputSet& outputs, CE ce) const;
 	void SwapBits(FactoredOutputSet& outputs, CE ce) const;

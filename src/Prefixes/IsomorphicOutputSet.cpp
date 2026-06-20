@@ -1,17 +1,8 @@
 #include "IsomorphicOutputSet.h"
 
-void IsomorphicOutputSet::OutputsKey::ComputeGraph() const
-{
-	OutputSet outputSet{ FactoredOutputSet{ prefix, n } };
-	graph = OutputGraph{ outputSet, n };
-}
+#include <digraph.hh>
 
-void IsomorphicOutputSet::OutputsKey::ForgetGraph() const
-{
-	graph.reset();
-}
-
-uint32_t IsomorphicOutputSet::OutputsKeyHasher::operator()(const OutputsKey& key) const
+size_t IsomorphicOutputSet::OutputsKeyHasher::operator()(const OutputsKey& key) const
 {
 	return key.hash;
 }
@@ -19,9 +10,14 @@ uint32_t IsomorphicOutputSet::OutputsKeyHasher::operator()(const OutputsKey& key
 bool IsomorphicOutputSet::OutputsKeyEq::operator()(const OutputsKey& aKey, const OutputsKey& bKey) const
 {
 	if (aKey.hash != bKey.hash) return false;
-	if (!aKey.graph) aKey.ComputeGraph();
-	if (!bKey.graph) bKey.ComputeGraph();
-	return aKey.graph == bKey.graph;
+
+	OutputSet aOutputs = GetOutputs(aKey.prefix, aKey.canonicalPerm.size());
+	OutputSet bOutputs = GetOutputs(bKey.prefix, bKey.canonicalPerm.size());
+
+	OutputSet aOutputsCanonical = Permute(aOutputs, aKey.canonicalPerm);
+	OutputSet bOutputsCanonical = Permute(bOutputs, bKey.canonicalPerm);
+
+	return aOutputsCanonical == bOutputsCanonical;
 }
 
 IsomorphicOutputSet::IsomorphicOutputSet(uint8_t n_)
@@ -29,42 +25,24 @@ IsomorphicOutputSet::IsomorphicOutputSet(uint8_t n_)
 
 void IsomorphicOutputSet::Insert(const Network& prefix, size_t idx)
 {
-	// Initialize the key object
-	OutputsKey key{ n, prefix, 0, std::nullopt };
-	key.ComputeGraph();
-	key.hash = key.graph->GetHash();
+	// Compute the canonical permutation of these outputs
+	OutputSet outputs = GetOutputs(prefix, n);
+	std::vector<uint8_t> canonicalPerm = GetCanonicalPermutation(outputs);
+	OutputSet outputsCanonical = Permute(outputs, canonicalPerm);
+	size_t hash = OutputSetHasher{}(outputsCanonical);
 
 	// Insert into map
-	auto [it, inserted] = map.try_emplace(std::move(key), std::vector<size_t>{ idx });
+	auto [it, inserted] = map.try_emplace(OutputsKey{ prefix, canonicalPerm, hash }, std::vector<size_t>{ idx });
 	if (!inserted) it->second.push_back(idx);
-	numInserted++;
-
-	// Periodically forget graphs to save memory
-	if (numInserted % 10 == 0)
-		ForgetGraphs();
 }
 
-void IsomorphicOutputSet::Merge(IsomorphicOutputSet&& other)
+void IsomorphicOutputSet::Merge(const IsomorphicOutputSet& other)
 {
-	size_t numMerged = 0;
-	while (!other.map.empty())
+	for (const auto& [key, eqClass] : other.map)
 	{
-		// Extract the node from the other set
-		auto node = other.map.extract(other.map.begin());
-		std::vector<size_t> eqClass{ node.mapped() };
-
-		// Insert the node into this map
-		// If the key already exists, concatenate the equivalence classes
-		auto insertResult = map.insert(std::move(node));
-		if (!insertResult.inserted)
-		{
-			std::vector<size_t>& srcClass = insertResult.position->second;
-			srcClass.insert(srcClass.end(), eqClass.begin(), eqClass.end());
-		}
-
-		// Forget the graphs in this map
-		if (++numMerged % 10 == 0)
-			ForgetGraphs();
+		auto [it, inserted] = map.try_emplace(key, eqClass);
+		if (!inserted)
+			it->second.insert(it->second.end(), eqClass.begin(), eqClass.end());
 	}
 }
 
@@ -77,8 +55,40 @@ std::vector<std::vector<size_t>> IsomorphicOutputSet::GetEquivalenceClasses() co
 	return equivalenceClasses;
 }
 
-void IsomorphicOutputSet::ForgetGraphs() const
+std::vector<uint8_t> IsomorphicOutputSet::GetCanonicalPermutation(const OutputSet& outputs) const
 {
-	for (const auto& [key, _] : map)
-		key.ForgetGraph();
+	enum VertexType
+	{
+		VertexBit,
+		VertexOutput
+	};
+
+	bliss::Digraph g;
+
+	// Create bit vertices
+	std::vector<uint32_t> bitVertices;
+	bitVertices.reserve(n);
+	for (uint8_t bi = 0; bi < n; bi++)
+		bitVertices.push_back(g.add_vertex(VertexBit));
+
+	// Create output vertices and add edges
+	for (uint64_t output : outputs)
+	{
+		uint32_t v = g.add_vertex(VertexOutput);
+		for (uint8_t bi = 0; bi < n; bi++)
+			if (output & (1ULL << bi))
+				g.add_edge(v, bitVertices[bi]);
+	}
+
+	// Compute the canonical perm
+	bliss::Stats stats;
+	const uint32_t* u32perm = g.canonical_form(stats);
+
+	// Convert the permutation from uint32's to uint8's
+	std::vector<uint8_t> u8perm(n);
+	for (size_t i = 0; i < n; i++)
+		u8perm[i] = u32perm[i];
+
+	// bliss uses the 'scatter' permutation convention so we have to invert it
+	return InvertPerm(u8perm);
 }

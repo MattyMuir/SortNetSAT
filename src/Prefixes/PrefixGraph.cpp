@@ -36,38 +36,7 @@ void PrefixGraph::AddPrefix(const Prefix& prefix)
 	idxToPrefix.push_back(sortedPrefix);
 }
 
-void PrefixGraph::AddIsomorphicOutputsEdgesV1()
-{
-	TIMER(addIsomorphicOutputsEdges);
-	// Insert all prefixes into the IsomorphicOutputSet to find
-	// all prefixes with equivalent outputs under permutation
-	IsomorphicOutputSet isoOutputsSet{ n };
-	for (size_t idx = 0; idx < nextVertexIdx; idx++)
-	{
-		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
-
-		if (idx % 10 == 0)
-			std::print("isomorphicOutputs: {:.3f}%\r", (double)idx / nextVertexIdx * 100.0);
-	}
-
-	// Get equivalence classes from the set
-	auto equivalenceClasses = isoOutputsSet.GetEquivalenceClasses();
-
-	// Add a cycle through all vertices of the class to make them an SCC
-	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
-	{
-		if (equivalenceClass.size() == 1) continue;
-		for (size_t i = 0; i < equivalenceClass.size(); i++)
-		{
-			size_t idx1 = equivalenceClass[i];
-			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
-			AddEdge(idxToVertex[idx1], idxToVertex[idx2], IsoOutputsEdge);
-		}
-	}
-	STOP_LOG(addIsomorphicOutputsEdges);
-}
-
-void PrefixGraph::AddIsomorphicOutputsEdgesV2()
+void PrefixGraph::AddIsomorphicOutputsEdges()
 {
 	TIMER(addIsomorphicOutputsEdges);
 
@@ -87,92 +56,6 @@ void PrefixGraph::AddIsomorphicOutputsEdgesV2()
 		threads.emplace_back([this, threadIdx, numThreads, &outputSets, &progress]()
 			{
 				IsomorphicOutputsStrided(outputSets[threadIdx], progress[threadIdx], threadIdx, numThreads);
-			});
-	}
-
-	// Log the progress of thread 0
-	for (;;)
-	{
-		if (progress[0] == 1.0) break;
-		std::print("isomorphicOutputs {:.3f}%\r", progress[0] * 100.0);
-		std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
-	}
-
-	for (auto& thread : threads) thread.join();
-
-	// Merge output sets
-	std::println("Merging!");
-	for (size_t i = 1; i < numThreads; i++)
-		outputSets[0].Merge(std::move(outputSets[i]));
-
-	// Get equivalence classes from the set
-	auto equivalenceClasses = outputSets[0].GetEquivalenceClasses();
-
-	// Add a cycle through all vertices of the class to make them an SCC
-	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
-	{
-		if (equivalenceClass.size() == 1) continue;
-		for (size_t i = 0; i < equivalenceClass.size(); i++)
-		{
-			size_t idx1 = equivalenceClass[i];
-			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
-			AddEdge(idxToVertex[idx1], idxToVertex[idx2], IsoOutputsEdge);
-		}
-	}
-	STOP_LOG(addIsomorphicOutputsEdges);
-}
-
-void PrefixGraph::AddIsomorphicOutputsEdgesV3()
-{
-	TIMER(addIsomorphicOutputsEdges);
-	// Insert all prefixes into the IsomorphicOutputSet to find
-	// all prefixes with equivalent outputs under permutation
-	IsomorphicOutputSetV2 isoOutputsSet{ n };
-	for (size_t idx = 0; idx < nextVertexIdx; idx++)
-	{
-		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
-
-		if (idx % 10 == 0)
-			std::print("isomorphicOutputs: {:.3f}%\r", (double)idx / nextVertexIdx * 100.0);
-	}
-
-	// Get equivalence classes from the set
-	auto equivalenceClasses = isoOutputsSet.GetEquivalenceClasses();
-
-	// Add a cycle through all vertices of the class to make them an SCC
-	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
-	{
-		if (equivalenceClass.size() == 1) continue;
-		for (size_t i = 0; i < equivalenceClass.size(); i++)
-		{
-			size_t idx1 = equivalenceClass[i];
-			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
-			AddEdge(idxToVertex[idx1], idxToVertex[idx2], IsoOutputsEdge);
-		}
-	}
-	STOP_LOG(addIsomorphicOutputsEdges);
-}
-
-void PrefixGraph::AddIsomorphicOutputsEdgesV4()
-{
-	TIMER(addIsomorphicOutputsEdges);
-
-	// Reserve storage for each thread's isomorphic output set
-	size_t numThreads = std::thread::hardware_concurrency() - 1;
-	std::vector<IsomorphicOutputSetV2> outputSets;
-	outputSets.reserve(numThreads);
-	for (size_t i = 0; i < numThreads; i++)
-		outputSets.emplace_back(n);
-
-	// Initialize the threads to process strided vertices
-	std::vector<double> progress(numThreads);
-	std::vector<std::thread> threads;
-	threads.reserve(numThreads);
-	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
-	{
-		threads.emplace_back([this, threadIdx, numThreads, &outputSets, &progress]()
-			{
-				IsomorphicOutputsStridedV2(outputSets[threadIdx], progress[threadIdx], threadIdx, numThreads);
 			});
 	}
 
@@ -309,16 +192,6 @@ void PrefixGraph::AddEdge(Vertex* a, Vertex* b, EdgeType type)
 }
 
 void PrefixGraph::IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads)
-{
-	for (size_t idx = threadIdx; idx < nextVertexIdx; idx += numThreads)
-	{
-		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
-		progress = (double)idx / nextVertexIdx;
-	}
-	progress = 1.0;
-}
-
-void PrefixGraph::IsomorphicOutputsStridedV2(IsomorphicOutputSetV2& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads)
 {
 	for (size_t idx = threadIdx; idx < nextVertexIdx; idx += numThreads)
 	{

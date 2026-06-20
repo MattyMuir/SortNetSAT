@@ -42,7 +42,7 @@ std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 		}
 
 		// Determine inextendible implication edges
-		graph.AddIsomorphicOutputsEdgesV4();
+		graph.AddIsomorphicOutputsEdges();
 		graph.AddOutputEdges();
 
 		// Get all representatives

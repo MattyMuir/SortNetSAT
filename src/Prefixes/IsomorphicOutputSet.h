@@ -3,25 +3,19 @@
 
 #include <sortnetutils.h>
 
-#include "OutputGraph.h"
-
 class IsomorphicOutputSet
 {
 protected:
 	struct OutputsKey
 	{
-		uint8_t n;
 		Network prefix;
-		uint32_t hash;
-		mutable std::optional<OutputGraph> graph;
-
-		void ComputeGraph() const;
-		void ForgetGraph() const;
+		std::vector<uint8_t> canonicalPerm;
+		size_t hash;
 	};
 
 	struct OutputsKeyHasher
 	{
-		uint32_t operator()(const OutputsKey& key) const;
+		size_t operator()(const OutputsKey& key) const;
 	};
 
 	struct OutputsKeyEq
@@ -35,13 +29,12 @@ public:
 	IsomorphicOutputSet(IsomorphicOutputSet&& other) = default;
 
 	void Insert(const Network& prefix, size_t idx);
-	void Merge(IsomorphicOutputSet&& other);
+	void Merge(const IsomorphicOutputSet& other);
 	std::vector<std::vector<size_t>> GetEquivalenceClasses() const;
 
 protected:
 	uint8_t n;
 	std::unordered_map<OutputsKey, std::vector<size_t>, OutputsKeyHasher, OutputsKeyEq> map;
-	size_t numInserted = 0;
 
-	void ForgetGraphs() const;
+	std::vector<uint8_t> GetCanonicalPermutation(const OutputSet& outputs) const;
 };
