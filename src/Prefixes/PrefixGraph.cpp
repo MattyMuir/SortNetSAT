@@ -122,6 +122,37 @@ void PrefixGraph::AddIsomorphicOutputsEdgesV2()
 	STOP_LOG(addIsomorphicOutputsEdges);
 }
 
+void PrefixGraph::AddIsomorphicOutputsEdgesV3()
+{
+	TIMER(addIsomorphicOutputsEdges);
+	// Insert all prefixes into the IsomorphicOutputSet to find
+	// all prefixes with equivalent outputs under permutation
+	IsomorphicOutputSetV2 isoOutputsSet{ n };
+	for (size_t idx = 0; idx < nextVertexIdx; idx++)
+	{
+		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
+
+		if (idx % 10 == 0)
+			std::print("isomorphicOutputs: {:.3f}%\r", (double)idx / nextVertexIdx * 100.0);
+	}
+
+	// Get equivalence classes from the set
+	auto equivalenceClasses = isoOutputsSet.GetEquivalenceClasses();
+
+	// Add a cycle through all vertices of the class to make them an SCC
+	for (const std::vector<size_t>& equivalenceClass : equivalenceClasses)
+	{
+		if (equivalenceClass.size() == 1) continue;
+		for (size_t i = 0; i < equivalenceClass.size(); i++)
+		{
+			size_t idx1 = equivalenceClass[i];
+			size_t idx2 = equivalenceClass[(i + 1) % equivalenceClass.size()];
+			AddEdge(idxToVertex[idx1], idxToVertex[idx2], IsoOutputsEdge);
+		}
+	}
+	STOP_LOG(addIsomorphicOutputsEdges);
+}
+
 static inline bool StrictSubset(const OutputSet& a, const OutputSet& b)
 {
 	if (a.Size() >= b.Size()) return false;

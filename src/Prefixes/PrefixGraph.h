@@ -5,6 +5,7 @@
 #include <sortnetutils.h>
 
 #include "IsomorphicOutputSet.h"
+#include "IsomorphicOutputSetV2.h"
 
 class PrefixGraph
 {

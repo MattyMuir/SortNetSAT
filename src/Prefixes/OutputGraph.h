@@ -16,7 +16,9 @@ public:
 	bool operator==(const OutputGraph& other) const;
 
 	uint32_t GetHash() const;
+	std::vector<uint8_t> GetPerm() const;
 
 protected:
 	bliss::Digraph* graph;
+	std::vector<uint8_t> perm;
 };

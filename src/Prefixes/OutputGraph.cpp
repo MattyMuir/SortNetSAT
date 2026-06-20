@@ -25,10 +25,18 @@ OutputGraph::OutputGraph(const OutputSet& outputs, uint8_t n)
 				g.add_edge(v, bitVertices[bi]);
 	}
 
-	// Rewrite g in canonical form
+	// Compute the canonical perm
 	bliss::Stats stats;
-	const uint32_t* perm = g.canonical_form(stats);
-	graph = g.permute(perm);
+	const uint32_t* canonicalPerm = g.canonical_form(stats);
+
+	// Copy the permutation of the bit vertices to the 'perm' member
+	for (size_t i = 0; i < n; i++)
+		perm.push_back(canonicalPerm[i]);
+
+	perm = InvertPerm(perm);
+
+	// Re-write g in canonical form
+	graph = g.permute(canonicalPerm);
 }
 
 OutputGraph::OutputGraph(OutputGraph&& other) noexcept
@@ -63,4 +71,9 @@ bool OutputGraph::operator==(const OutputGraph& other) const
 uint32_t OutputGraph::GetHash() const
 {
 	return graph->get_hash();
+}
+
+std::vector<uint8_t> OutputGraph::GetPerm() const
+{
+	return perm;
 }

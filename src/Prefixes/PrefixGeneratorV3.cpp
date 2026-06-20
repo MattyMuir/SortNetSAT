@@ -45,6 +45,8 @@ std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 		graph.AddIsomorphicOutputsEdgesV1();
 		graph.AddOutputEdges();
 
+		graph.SaveGraphviz("graphGraphEquiv.gv");
+
 		// Get all representatives
 		allPrefixes = graph.GetRepresentatives();
 		std::println("Number of {}-layer prefixes: {}", k + 1, allPrefixes.size());
