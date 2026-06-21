@@ -11,8 +11,8 @@ bool IsomorphicOutputSet::OutputsKeyEq::operator()(const OutputsKey& aKey, const
 {
 	if (aKey.hash != bKey.hash) return false;
 
-	OutputSet aOutputs = GetOutputs(aKey.prefix, aKey.canonicalPerm.size());
-	OutputSet bOutputs = GetOutputs(bKey.prefix, bKey.canonicalPerm.size());
+	OutputSet aOutputs = GetOutputs(Concatenate(*aKey.prefix), aKey.canonicalPerm.size());
+	OutputSet bOutputs = GetOutputs(Concatenate(*bKey.prefix), bKey.canonicalPerm.size());
 
 	OutputSet aOutputsCanonical = Permute(aOutputs, aKey.canonicalPerm);
 	OutputSet bOutputsCanonical = Permute(bOutputs, bKey.canonicalPerm);
@@ -23,10 +23,10 @@ bool IsomorphicOutputSet::OutputsKeyEq::operator()(const OutputsKey& aKey, const
 IsomorphicOutputSet::IsomorphicOutputSet(uint8_t n_)
 	: n(n_) {}
 
-void IsomorphicOutputSet::Insert(const Network& prefix, size_t idx)
+void IsomorphicOutputSet::Insert(const LayeredNetwork* prefix, size_t idx)
 {
 	// Compute the canonical permutation of these outputs
-	OutputSet outputs = GetOutputs(prefix, n);
+	OutputSet outputs = GetOutputs(Concatenate(*prefix), n);
 	std::vector<uint8_t> canonicalPerm = GetCanonicalPermutation(outputs);
 	OutputSet outputsCanonical = Permute(outputs, canonicalPerm);
 	size_t hash = OutputSetHasher{}(outputsCanonical);
@@ -65,16 +65,29 @@ std::vector<uint8_t> IsomorphicOutputSet::GetCanonicalPermutation(const OutputSe
 
 	bliss::Digraph g;
 
+	// Reserve space for vertices
+	g.reserve_vertices(n + outputs.Size());
+
 	// Create bit vertices
 	std::vector<uint32_t> bitVertices;
 	bitVertices.reserve(n);
 	for (uint8_t bi = 0; bi < n; bi++)
 		bitVertices.push_back(g.add_vertex(VertexBit));
 
+	// Reserve space for bit-vertex edges
+	std::vector<size_t> edgesIn(n);
+	for (uint64_t output : outputs)
+		for (uint8_t bi = 0; bi < n; bi++)
+			if (output & (1ULL << bi))
+				edgesIn[bi]++;
+	for (uint8_t bi = 0; bi < n; bi++)
+		g.reserve_edges_in(bitVertices[bi], edgesIn[bi]);
+
 	// Create output vertices and add edges
 	for (uint64_t output : outputs)
 	{
 		uint32_t v = g.add_vertex(VertexOutput);
+		g.reserve_edges_out(v, std::popcount(output));
 		for (uint8_t bi = 0; bi < n; bi++)
 			if (output & (1ULL << bi))
 				g.add_edge(v, bitVertices[bi]);

@@ -8,7 +8,7 @@ class IsomorphicOutputSet
 protected:
 	struct OutputsKey
 	{
-		Network prefix;
+		const LayeredNetwork* prefix;
 		std::vector<uint8_t> canonicalPerm;
 		size_t hash;
 	};
@@ -28,7 +28,7 @@ public:
 	IsomorphicOutputSet(const IsomorphicOutputSet& other) = delete;
 	IsomorphicOutputSet(IsomorphicOutputSet&& other) = default;
 
-	void Insert(const Network& prefix, size_t idx);
+	void Insert(const LayeredNetwork* prefix, size_t idx);
 	void Merge(const IsomorphicOutputSet& other);
 	std::vector<std::vector<size_t>> GetEquivalenceClasses() const;
 

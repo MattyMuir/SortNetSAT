@@ -62,15 +62,15 @@ void PrefixGraph::AddIsomorphicOutputsEdges()
 	// Log the progress of thread 0
 	for (;;)
 	{
-		if (progress[0] == 1.0) break;
 		std::print("isomorphicOutputs {:.3f}%\r", progress[0] * 100.0);
+		if (progress[0] == 1.0) break;
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
 	}
 
 	for (auto& thread : threads) thread.join();
 
 	// Merge output sets
-	std::println("Merging!");
+	std::print("Merging isomorphic output sets\r");
 	for (size_t i = 1; i < numThreads; i++)
 		outputSets[0].Merge(outputSets[i]);
 
@@ -195,7 +195,7 @@ void PrefixGraph::IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, d
 {
 	for (size_t idx = threadIdx; idx < nextVertexIdx; idx += numThreads)
 	{
-		isoOutputsSet.Insert(Concatenate(idxToPrefix[idx]), idx);
+		isoOutputsSet.Insert(&idxToPrefix[idx], idx);
 		progress = (double)idx / nextVertexIdx;
 	}
 	progress = 1.0;
@@ -266,30 +266,18 @@ void PrefixGraph::AddOutputEdges(Vertex* vertex, const FactoredOutputSet& output
 		ApplyCE(extOutputs, addedCE);
 		OutputSet extOutputSet{ extOutputs };
 
-		if (outputSet == extOutputSet) // Check for identical outputs
-		{
-			AddEdge(vertex, extVertex, OutputEdge);
-			AddEdge(extVertex, vertex, OutputEdge);
-		}
-		else if (StrictSubset(extOutputSet, outputSet)) // Check for output subset
+		if (StrictSubset(extOutputSet, outputSet)) // Check for output subset
 		{
 			AddEdge(extVertex, vertex, OutputEdge);
 		}
-		else // Try adding the comparator upside-down
+		else // Try adding the comparator(s) upside-down
 		{
 			FactoredOutputSet flippedOutputs{ extOutputs };
 			SwapBits(flippedOutputs, addedCE);
 			OutputSet flippedOutputSet{ flippedOutputs };
 
-			if (outputSet == flippedOutputSet) // Check for identical outputs
-			{
-				AddEdge(vertex, extVertex, OutputEdge);
+			if (StrictSubset(flippedOutputSet, outputSet)) // Check for output subset
 				AddEdge(extVertex, vertex, OutputEdge);
-			}
-			else if (StrictSubset(flippedOutputSet, outputSet)) // Check for output subset
-			{
-				AddEdge(extVertex, vertex, OutputEdge);
-			}
 		}
 
 		AddOutputEdges(extVertex, extOutputs);
