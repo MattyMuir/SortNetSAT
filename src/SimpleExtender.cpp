@@ -1,5 +1,7 @@
 #include "SimpleExtender.h"
 
+#include <algorithm>
+
 #include "Prefixes/prefixes.h"
 #include "Prefixes/WindowMinimizer.h"
 #include "FormulaGenerator.h"

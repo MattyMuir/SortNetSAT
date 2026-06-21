@@ -13,6 +13,9 @@ target_link_libraries(SortNetSAT PUBLIC minisat::minisat)
 find_package(bliss REQUIRED)
 target_link_libraries(SortNetSAT PUBLIC bliss::bliss)
 
+find_package(Threads REQUIRED)
+target_link_libraries(SortNetSAT PUBLIC Threads::Threads)
+
 # === Feature Enables ===
 if (SNS_MSVC_STATIC_RUNTIME)
     set_property(TARGET SortNetSAT PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -20,3 +23,10 @@ endif()
 target_compile_features(SortNetSAT PRIVATE cxx_std_23)
 enable_ipo(SortNetSAT)
 set_arch(SortNetSAT)
+
+set(HAMILTON OFF CACHE BOOL "Link dynamically against the standard library on Hamilton")
+if (UNIX)
+    set_target_properties(SortNetSAT PROPERTIES
+		BUILD_RPATH "/apps/developers/compilers/llvm/20.1.8/1/default/lib/x86_64-unknown-linux-gnu"
+	)
+endif()
