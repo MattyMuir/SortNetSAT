@@ -52,7 +52,6 @@ protected:
 	size_t numVerticesProcessed = 0;
 
 	void AddEdge(Vertex* a, Vertex* b, EdgeType type);
-	void IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads);
 	std::vector<std::pair<Vertex*, CE>> GetExtensions(Vertex* vertex) const;
 	void ApplyCE(FactoredOutputSet& outputs, CE ce) const;
 	void SwapBits(FactoredOutputSet& outputs, CE ce) const;

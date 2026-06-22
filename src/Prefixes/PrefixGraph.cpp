@@ -47,23 +47,28 @@ void PrefixGraph::AddIsomorphicOutputsEdges()
 	for (size_t i = 0; i < numThreads; i++)
 		outputSets.emplace_back(n);
 
-	// Initialize the threads to process strided vertices
-	std::vector<double> progress(numThreads);
+	// Initialize worker threads
+	std::atomic<size_t> idxToBeProcessed = 0;
 	std::vector<std::thread> threads;
 	threads.reserve(numThreads);
 	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
 	{
-		threads.emplace_back([this, threadIdx, numThreads, &outputSets, &progress]()
+		threads.emplace_back([this, threadIdx, &outputSets, &idxToBeProcessed]()
+		{
+			for (;;)
 			{
-				IsomorphicOutputsStrided(outputSets[threadIdx], progress[threadIdx], threadIdx, numThreads);
-			});
+				size_t idx = idxToBeProcessed++;
+				if (idx >= nextVertexIdx) break;
+				outputSets[threadIdx].Insert(&idxToPrefix[idx], idx);
+			}
+		});
 	}
 
-	// Log the progress of thread 0
+	// Log the progress
 	for (;;)
 	{
-		std::print("isomorphicOutputs {:.3f}%\r", progress[0] * 100.0);
-		if (progress[0] == 1.0) break;
+		std::print("isomorphicOutputs {:.3f}%\r", (double)idxToBeProcessed / nextVertexIdx * 100.0);
+		if (idxToBeProcessed >= nextVertexIdx) break;
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
 	}
 
@@ -189,16 +194,6 @@ void PrefixGraph::AddEdge(Vertex* a, Vertex* b, EdgeType type)
 	edgeTypes.emplace(std::pair<size_t, size_t>{ a->idx, b->idx }, type);
 	a->outgoing.push_back(b);
 	b->incoming.push_back(a);
-}
-
-void PrefixGraph::IsomorphicOutputsStrided(IsomorphicOutputSet& isoOutputsSet, double& progress, size_t threadIdx, size_t numThreads)
-{
-	for (size_t idx = threadIdx; idx < nextVertexIdx; idx += numThreads)
-	{
-		isoOutputsSet.Insert(&idxToPrefix[idx], idx);
-		progress = (double)idx / nextVertexIdx;
-	}
-	progress = 1.0;
 }
 
 std::vector<std::pair<PrefixGraph::Vertex*, CE>> PrefixGraph::GetExtensions(Vertex* vertex) const

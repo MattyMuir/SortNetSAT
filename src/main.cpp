@@ -139,7 +139,7 @@ Network RandomNetwork(uint8_t n, size_t size)
 
 int main()
 {
-	PrefixGeneratorV3 generator{ 18, 2, true };
+	PrefixGeneratorV3 generator{ 16, 2, true };
 	auto allPrefixes = generator.GeneratePrefixes();
 	SavePrefixFile("sym_18_2.txt", allPrefixes);
 }
