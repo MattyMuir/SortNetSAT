@@ -1,18 +1,25 @@
 #pragma once
-#include <unordered_set>
+#include <optional>
 
 #include <sortnetutils.h>
+
+#include "SubsumptionSolver.h"
 
 class PrefixGenerator
 {
 protected:
-	struct NetworkOutputs
+	struct NetworkSignature
 	{
-		Network network;
-		std::unordered_set<uint64_t> outputs;
+		size_t numOutputs;
+	};
 
-		NetworkOutputs() = default;
-		NetworkOutputs(const Network& network_, uint8_t n);
+	struct NetworkMeta
+	{
+		Network prefix;
+		NetworkSignature signature;
+		std::optional<std::vector<uint64_t>> outputs = std::nullopt;
+
+		void CacheOutputs(uint8_t n);
 	};
 
 public:
@@ -24,20 +31,15 @@ protected:
 	uint8_t n, d;
 	bool symmetric;
 
-	std::vector<CE> alphabet;
 	std::vector<Network> allLayers;
-	std::vector<NetworkOutputs> R, N;
+	std::vector<NetworkMeta> prefixes;
+	SubsumptionSolver solver;
 
-	void Generate();
-	void Prune();
-	bool CanAddCE(const Network& layer, CE ce) const;
-	void AddCEInplace(Network& layer, CE ce) const;
-	Network AddCE(const Network& layer, CE ce) const;
-	static void ReduceOutputs(std::unordered_set<uint64_t>& outputs, CE ce);
-	static NetworkOutputs AddLayer(const NetworkOutputs& network, const Network& layer);
+	void Generate(bool isFirst);
+	void Prune(size_t maxSearches = 0);
 
 	// Sumsumption testing
-	bool CannotSubsume1(const NetworkOutputs& a, const NetworkOutputs& b) const;
-	bool IsPermutedSubset(const std::unordered_set<uint64_t>& a, const std::unordered_set<uint64_t>& b) const;
-	bool Subsumes(const NetworkOutputs& a, const NetworkOutputs& b) const;
+	NetworkSignature ComputeSignature(const FactoredOutputSet& outputs);
+	SubsumptionResult SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig);
+	bool Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_t maxSearches);
 };

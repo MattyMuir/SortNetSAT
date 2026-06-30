@@ -2,6 +2,7 @@
 #include <fstream>
 #include <algorithm>
 #include <set>
+#include <numeric>
 
 #include "Timer.h"
 
@@ -13,6 +14,8 @@
 #include "Prefixes/PrefixGeneratorV3.h"
 #include "Prefixes/LayerDAG.h"
 #include "Prefixes/WindowMinimizer.h"
+#include "Prefixes/NetworkGraph.h"
+#include "Prefixes/SubsumptionSolver.h"
 
 void FractionBenchmark()
 {
@@ -120,26 +123,70 @@ void GenerateCactusPlot()
 	for (double t : times) std::println("{:.3f}", t);
 }
 
-Network RandomNetwork(uint8_t n, size_t size)
+bool AreIsomorphicV1(const Network& a, const Network& b, uint8_t n)
 {
-	std::vector<CE> alphabet;
-	for (uint8_t i = 0; i + 1 < n; i++)
-		for (uint8_t j = i + 1; j < n; j++)
-			alphabet.push_back({ i, j });
+	NetworkGraph ga{ GetLayers(a), n };
+	NetworkGraph gb{ GetLayers(b), n };
+	return ga == gb;
+}
 
-	static std::mt19937_64 gen{ std::random_device{}() };
-	std::uniform_int_distribution<size_t> dist{ 0, alphabet.size() - 1 };
+static inline bool IsSymmetric(const std::vector<uint8_t>& perm)
+{
+	uint8_t n = (uint8_t)perm.size();
 
-	Network network;
-	for (size_t i = 0; i < size; i++)
-		network.push_back(alphabet[dist(gen)]);
+	for (uint8_t dst = 0; dst < n; dst++)
+	{
+		uint8_t src = perm[dst];
 
-	return network;
+		if (perm[n - 1 - dst] != n - 1 - src)
+			return false;
+	}
+
+	return true;
+}
+
+bool AreIsomorphicV2(const Network& a, const Network& b, uint8_t n, bool symmetric)
+{
+	if (a.size() != b.size()) return false;
+
+	std::vector<uint8_t> perm(n);
+	std::iota(perm.begin(), perm.end(), 0);
+
+	auto bLayers = GetLayers(b);
+	for (Network& layer : bLayers)
+		std::sort(layer.begin(), layer.end());
+
+	do
+	{
+		if (symmetric && !IsSymmetric(perm))
+			continue;
+
+		Network permuted{ a };
+		Permute(permuted, perm);
+		Untangle(permuted, n);
+
+		auto pLayers = GetLayers(permuted);
+		for (Network& layer : pLayers)
+			std::sort(layer.begin(), layer.end());
+
+		if (bLayers == pLayers)
+		{
+			std::println("{}", perm);
+			return true;
+		}
+
+	} while (std::next_permutation(perm.begin(), perm.end()));
+
+	return false;
 }
 
 int main()
 {
-	PrefixGeneratorV3 generator{ 16, 2, true };
+	PrefixGenerator generator{ 12, 3, true };
+
+	TIMER(genPrefixes);
 	auto allPrefixes = generator.GeneratePrefixes();
-	SavePrefixFile("sym_18_2.txt", allPrefixes);
+	STOP_LOG(genPrefixes);
+
+	std::println("Number of 3-layer prefixes: {}", allPrefixes.size());
 }
