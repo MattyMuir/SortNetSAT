@@ -11,6 +11,8 @@ protected:
 	struct NetworkSignature
 	{
 		size_t numOutputs;
+		std::vector<size_t> t2;
+		std::vector<size_t> t3z, t3o;
 	};
 
 	struct NetworkMeta
@@ -20,6 +22,7 @@ protected:
 		std::optional<std::vector<uint64_t>> outputs = std::nullopt;
 
 		void CacheOutputs(uint8_t n);
+		void ClearCache();
 	};
 
 public:
@@ -36,10 +39,11 @@ protected:
 	SubsumptionSolver solver;
 
 	void Generate(bool isFirst);
+	bool IsAlreadyRepresented(const NetworkMeta& prefix, const std::vector<size_t> representatives, size_t maxSearches);
 	void Prune(size_t maxSearches = 0);
 
 	// Sumsumption testing
-	NetworkSignature ComputeSignature(const FactoredOutputSet& outputs);
+	NetworkSignature ComputeSignature(const FactoredOutputSet& factoredOutputs);
 	SubsumptionResult SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig);
 	bool Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_t maxSearches);
 };

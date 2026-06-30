@@ -182,7 +182,7 @@ bool AreIsomorphicV2(const Network& a, const Network& b, uint8_t n, bool symmetr
 
 int main()
 {
-	PrefixGenerator generator{ 12, 3, true };
+	PrefixGenerator generator{ 16, 2, true };
 
 	TIMER(genPrefixes);
 	auto allPrefixes = generator.GeneratePrefixes();

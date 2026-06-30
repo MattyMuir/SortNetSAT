@@ -3,6 +3,7 @@
 #include <print>
 #include <numeric>
 #include <algorithm>
+#include <ranges>
 
 #include "prefixes.h"
 #include "SubsumptionSolver.h"
@@ -11,6 +12,11 @@
 void PrefixGenerator::NetworkMeta::CacheOutputs(uint8_t n)
 {
 	outputs = FactoredOutputSet{ prefix, n }.ToVector();
+}
+
+void PrefixGenerator::NetworkMeta::ClearCache()
+{
+	outputs.reset();
 }
 
 PrefixGenerator::PrefixGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
@@ -29,9 +35,9 @@ std::vector<Network> PrefixGenerator::GeneratePrefixes()
 	for (uint8_t k = 0; k < d; k++)
 	{
 		Generate(k == 0);
-		std::println("Pruning {}-layer prefixes...", k + 1);
 		Prune(100);
 		Prune();
+		std::println("Number of {}-layer prefixes: {}", k + 1, prefixes.size());
 	}
 
 	// Strip the metadata from prefixes
@@ -65,48 +71,104 @@ void PrefixGenerator::Generate(bool isFirst)
 	}
 }
 
+bool PrefixGenerator::IsAlreadyRepresented(const NetworkMeta& prefix, const std::vector<size_t> representatives, size_t maxSearches)
+{
+	for (size_t repIdx : representatives)
+		if (Subsumes(prefixes[repIdx], prefix, maxSearches))
+			return true;
+	return false;
+}
+
 void PrefixGenerator::Prune(size_t maxSearches)
 {
-	std::vector<NetworkMeta> pruned;
+	std::vector<size_t> representatives;
 	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
 	{
+		// Log progress
 		if (prefixIdx % 75 == 0)
 			std::print("Progress: {:.3f}%\r", (double)prefixIdx / prefixes.size() * 100.0);
-		const NetworkMeta& prefix = prefixes[prefixIdx];
 
-		// Skip if 'prefix' is subsumed by another prefix already in pruned
-		bool subsumed = false;
-		for (const NetworkMeta& other : pruned)
-			if (Subsumes(other, prefix, maxSearches)) { subsumed = true; break; }
-		if (subsumed) continue;
+		// Get the current prefix and cache its outputs
+		NetworkMeta& prefix = prefixes[prefixIdx];
+		prefix.CacheOutputs(n);
+		
+		// Skip this prefix if its already represented
+		if (IsAlreadyRepresented(prefix, representatives, maxSearches))
+		{
+			prefix.ClearCache();
+			continue;
+		}
 
-		// Remove prefixes in pruned subsumed by 'prefix'
-		std::erase_if(pruned, [this, &prefix, maxSearches](const NetworkMeta& other)
+		// Remove representatives that are subsumed by the new prefix (and clear their caches)
+		std::erase_if(representatives, [&, this](size_t repIdx)
 			{
-				return Subsumes(prefix, other, maxSearches);
+				bool subsumes = Subsumes(prefix, prefixes[repIdx], maxSearches);
+				if (subsumes) prefixes[repIdx].ClearCache();
+				return subsumes;
 			});
 
-		// Add to pruned
-		pruned.push_back(prefix);
-
-		// Prefixes in the pruned set have their outputs cached
-		pruned.back().CacheOutputs(n);
+		// Add the new prefix as a representative
+		representatives.push_back(prefixIdx);
 	}
 
-	std::swap(pruned, prefixes);
+	// Clear all caches
+	for (NetworkMeta& network : prefixes)
+		network.ClearCache();
+
+	// Update global prefixes variable
+	std::vector<NetworkMeta> newPrefixes;
+	for (size_t repIdx : representatives)
+		newPrefixes.emplace_back(std::move(prefixes[repIdx]));
+	std::swap(prefixes, newPrefixes);
 }
 
 SubsumptionResult PrefixGenerator::SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig)
 {
-	if (aSig.numOutputs > bSig.numOutputs) return DoesntSubsume;
+	// === T1 Signature ===
+	if (aSig.numOutputs > bSig.numOutputs)
+		return DoesntSubsume;
+
+	// === T2 Signature ===
+	for (uint8_t popcount = 0; popcount <= n; popcount++)
+		if (aSig.t2[popcount] > bSig.t2[popcount])
+			return DoesntSubsume;
+
+	// === T3 Signature ===
+	for (uint8_t popcount = 0; popcount <= n; popcount++)
+		if (aSig.t3z[popcount] > bSig.t3z[popcount] || aSig.t3o[popcount] > bSig.t3o[popcount])
+			return DoesntSubsume;
 
 	return Unknown;
 }
 
-PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const FactoredOutputSet& outputs)
+PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const FactoredOutputSet& factoredOutputs)
 {
-	size_t numOutputs = outputs.Size();
-	return NetworkSignature{ numOutputs };
+	std::vector<uint64_t> outputs = factoredOutputs.ToVector();
+
+	// === T1 Signature ===
+	size_t numOutputs = outputs.size();
+
+	// === T2 Signature ===
+	std::vector<size_t> t2(n + 1);
+	for (uint64_t output : outputs)
+		t2[std::popcount(output)]++;
+
+	// === T3 Signature ===
+	std::vector<uint64_t> zeroPos(n + 1), onePos(n + 1);
+	for (uint64_t output : outputs)
+	{
+		uint64_t popcount = std::popcount(output);
+		zeroPos[popcount] |= (~output) & ((1ULL << n) - 1);
+		onePos[popcount] |= output;
+	}
+	std::vector<size_t> t3z(n + 1), t3o(n + 1);
+	for (uint8_t popcount = 0; popcount <= n; popcount++)
+	{
+		t3z[popcount] = std::popcount(zeroPos[popcount]);
+		t3o[popcount] = std::popcount(onePos[popcount]);
+	}
+
+	return NetworkSignature{ numOutputs, t2, t3z, t3o };
 }
 
 bool PrefixGenerator::Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_t maxSearches)
@@ -115,12 +177,7 @@ bool PrefixGenerator::Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_
 	SubsumptionResult precheck = SignaturePrecheck(a.signature, b.signature);
 	if (precheck != Unknown) return (precheck == DoesSubsume);
 
-	// Compute the outputs if not cached
-	std::vector<uint64_t> aOutputs, bOutputs;
-	if (!a.outputs) aOutputs = FactoredOutputSet{ a.prefix, n }.ToVector();
-	if (!b.outputs) bOutputs = FactoredOutputSet{ b.prefix, n }.ToVector();
-
 	// Run a full backtracking subsumption test
-	SubsumptionResult result = solver.Solve(a.outputs.value_or(aOutputs), b.outputs.value_or(bOutputs), maxSearches);
+	SubsumptionResult result = solver.Solve(*a.outputs, *b.outputs, maxSearches);
 	return result == DoesSubsume;
 }

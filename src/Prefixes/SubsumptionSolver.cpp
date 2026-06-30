@@ -41,7 +41,8 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 	{
 		for (uint8_t dst = 0; dst < n; dst++)
 		{
-			if (aColumnSum[src] > bColumnSum[dst])
+			if (aColumnSum[src] > bColumnSum[dst]
+				|| a->size() - aColumnSum[src] > b->size() - bColumnSum[dst])
 			{
 				initialDomains[src] &= ~(1ULL << dst);
 				if (symmetric) initialDomains[n - 1 - src] &= ~(1ULL << (n - 1 - dst));
