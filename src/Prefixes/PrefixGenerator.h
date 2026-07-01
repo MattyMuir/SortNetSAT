@@ -18,11 +18,8 @@ protected:
 	struct NetworkMeta
 	{
 		Network prefix;
-		NetworkSignature signature;
 		std::optional<std::vector<uint64_t>> outputs = std::nullopt;
-
-		void CacheOutputs(uint8_t n);
-		void ClearCache();
+		std::optional<NetworkSignature> signature = std::nullopt;
 	};
 
 public:
@@ -43,7 +40,9 @@ protected:
 	void Prune(size_t maxSearches = 0);
 
 	// Sumsumption testing
-	NetworkSignature ComputeSignature(const FactoredOutputSet& factoredOutputs);
-	SubsumptionResult SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig);
+	NetworkSignature ComputeSignature(const std::vector<uint64_t>& outputs) const;
+	void CacheOutputs(NetworkMeta& network);
+	static void ClearCache(NetworkMeta& network);
+	SubsumptionResult SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig) const;
 	bool Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_t maxSearches);
 };

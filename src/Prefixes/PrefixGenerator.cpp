@@ -9,16 +9,6 @@
 #include "SubsumptionSolver.h"
 #include "../Timer.h"
 
-void PrefixGenerator::NetworkMeta::CacheOutputs(uint8_t n)
-{
-	outputs = FactoredOutputSet{ prefix, n }.ToVector();
-}
-
-void PrefixGenerator::NetworkMeta::ClearCache()
-{
-	outputs.reset();
-}
-
 PrefixGenerator::PrefixGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_),
 	allLayers(GetAllLayers(n, symmetric)),
@@ -28,21 +18,19 @@ PrefixGenerator::PrefixGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 std::vector<Network> PrefixGenerator::GeneratePrefixes()
 {
 	// Add the empty layer to the initial set of prefixes
-	Network empty{};
-	FactoredOutputSet emptyOutputs{ empty, n };
-	prefixes.emplace_back(empty, ComputeSignature(emptyOutputs));
+	prefixes.emplace_back(NetworkMeta{ Network{} });
 
 	for (uint8_t k = 0; k < d; k++)
 	{
 		Generate(k == 0);
-		Prune(100);
+		Prune(10);
 		Prune();
 		std::println("Number of {}-layer prefixes: {}", k + 1, prefixes.size());
 	}
 
 	// Strip the metadata from prefixes
 	std::vector<Network> noMeta;
-	for (const auto& networkMeta : prefixes)
+	for (auto& networkMeta : prefixes)
 		noMeta.emplace_back(std::move(networkMeta.prefix));
 	return noMeta;
 }
@@ -66,7 +54,7 @@ void PrefixGenerator::Generate(bool isFirst)
 			if (outputs.IsRedundant()) continue;
 
 			// Compute the signature and add this prefix
-			prefixes.emplace_back(extended, ComputeSignature(outputs));
+			prefixes.emplace_back(extended);
 		}
 	}
 }
@@ -86,16 +74,16 @@ void PrefixGenerator::Prune(size_t maxSearches)
 	{
 		// Log progress
 		if (prefixIdx % 75 == 0)
-			std::print("Progress: {:.3f}%\r", (double)prefixIdx / prefixes.size() * 100.0);
+			std::print("Progress: {:>6.3f}% R: {}\r", (double)prefixIdx / prefixes.size() * 100.0, representatives.size());
 
 		// Get the current prefix and cache its outputs
 		NetworkMeta& prefix = prefixes[prefixIdx];
-		prefix.CacheOutputs(n);
+		CacheOutputs(prefix);
 		
 		// Skip this prefix if its already represented
 		if (IsAlreadyRepresented(prefix, representatives, maxSearches))
 		{
-			prefix.ClearCache();
+			ClearCache(prefix);
 			continue;
 		}
 
@@ -103,7 +91,7 @@ void PrefixGenerator::Prune(size_t maxSearches)
 		std::erase_if(representatives, [&, this](size_t repIdx)
 			{
 				bool subsumes = Subsumes(prefix, prefixes[repIdx], maxSearches);
-				if (subsumes) prefixes[repIdx].ClearCache();
+				if (subsumes) ClearCache(prefixes[repIdx]);
 				return subsumes;
 			});
 
@@ -113,7 +101,7 @@ void PrefixGenerator::Prune(size_t maxSearches)
 
 	// Clear all caches
 	for (NetworkMeta& network : prefixes)
-		network.ClearCache();
+		ClearCache(network);
 
 	// Update global prefixes variable
 	std::vector<NetworkMeta> newPrefixes;
@@ -122,7 +110,7 @@ void PrefixGenerator::Prune(size_t maxSearches)
 	std::swap(prefixes, newPrefixes);
 }
 
-SubsumptionResult PrefixGenerator::SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig)
+SubsumptionResult PrefixGenerator::SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig) const
 {
 	// === T1 Signature ===
 	if (aSig.numOutputs > bSig.numOutputs)
@@ -141,10 +129,8 @@ SubsumptionResult PrefixGenerator::SignaturePrecheck(const NetworkSignature& aSi
 	return Unknown;
 }
 
-PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const FactoredOutputSet& factoredOutputs)
+PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const std::vector<uint64_t>& outputs) const
 {
-	std::vector<uint64_t> outputs = factoredOutputs.ToVector();
-
 	// === T1 Signature ===
 	size_t numOutputs = outputs.size();
 
@@ -171,10 +157,22 @@ PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const Factor
 	return NetworkSignature{ numOutputs, t2, t3z, t3o };
 }
 
+void PrefixGenerator::CacheOutputs(NetworkMeta& network)
+{
+	network.outputs = FactoredOutputSet{ network.prefix, n }.ToVector();
+	network.signature = ComputeSignature(*network.outputs);
+}
+
+void PrefixGenerator::ClearCache(NetworkMeta & network)
+{
+	network.outputs.reset();
+	network.signature.reset();
+}
+
 bool PrefixGenerator::Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_t maxSearches)
 {
 	// Run the signature-based prechecks
-	SubsumptionResult precheck = SignaturePrecheck(a.signature, b.signature);
+	SubsumptionResult precheck = SignaturePrecheck(*a.signature, *b.signature);
 	if (precheck != Unknown) return (precheck == DoesSubsume);
 
 	// Run a full backtracking subsumption test

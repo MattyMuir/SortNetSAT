@@ -19,7 +19,8 @@ readability-*,
 -performance-unnecessary-value-param,
 -readability-avoid-return-with-void-value,
 -readability-avoid-unconditional-preprocessor-if,
--readability-function-cognitive-complexity
+-readability-function-cognitive-complexity,
+-readability-use-anyofallof
 '
 
 WarningsAsErrors: ''

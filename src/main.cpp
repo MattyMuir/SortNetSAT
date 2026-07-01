@@ -182,11 +182,9 @@ bool AreIsomorphicV2(const Network& a, const Network& b, uint8_t n, bool symmetr
 
 int main()
 {
-	PrefixGenerator generator{ 16, 2, true };
+	PrefixGenerator generator{ 18, 1, true };
 
 	TIMER(genPrefixes);
 	auto allPrefixes = generator.GeneratePrefixes();
 	STOP_LOG(genPrefixes);
-
-	std::println("Number of 3-layer prefixes: {}", allPrefixes.size());
 }
