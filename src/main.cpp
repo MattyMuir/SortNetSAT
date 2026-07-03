@@ -180,11 +180,39 @@ bool AreIsomorphicV2(const Network& a, const Network& b, uint8_t n, bool symmetr
 	return false;
 }
 
+void Add(std::vector<double>& vec1, const std::vector<double>& vec2)
+{
+	for (size_t i = 0; i < vec1.size(); i++)
+		vec1[i] += vec2[i];
+}
+
 int main()
 {
-	PrefixGenerator generator{ 18, 1, true };
+	PrefixGenerator generator{ 12, 3, true };
+	generator.GeneratePrefixes();
+	std::println("{}", generator.GetTimings());
+	return 0;
 
-	TIMER(genPrefixes);
-	auto allPrefixes = generator.GeneratePrefixes();
-	STOP_LOG(genPrefixes);
+	uint8_t maxN = 14;
+	uint8_t maxDepth = 3;
+	size_t repeats = 3;
+
+	std::vector<std::vector<double>> allTimings(maxN / 2, std::vector<double>(maxDepth));
+
+	for (uint8_t n = 2; n <= maxN; n += 2)
+	{
+		for (size_t repeat = 0; repeat < repeats; repeat++)
+		{
+			PrefixGenerator generator{ n, maxDepth, true };
+			generator.GeneratePrefixes();
+			Add(allTimings[n / 2 - 1], generator.GetTimings());
+		}
+	}
+
+	for (uint8_t d = 1; d <= maxDepth; d++)
+	{
+		for (uint8_t n = 2; n <= maxN; n += 2)
+			std::print("{:.10f},", allTimings[n / 2 - 1][d - 1] / repeats);
+		std::println();
+	}
 }
