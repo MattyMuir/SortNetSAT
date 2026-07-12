@@ -5,8 +5,8 @@
 
 #include <immintrin.h>
 
-SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_)
-	: n(n_), symmetric(symmetric_),
+SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_)
+	: n(n_), symmetric(symmetric_), maxSearches(maxSearches_ ? maxSearches_ : UINT64_MAX),
 	initialDomains(n, (uint64_t)-1), perm(n, Unassigned), patternCounts(n + 1), patternSources(n + 1)
 {
 	// Initialize pattern LUTs
@@ -17,7 +17,7 @@ SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_)
 	}
 }
 
-SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_, size_t maxSearches_)
+SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_)
 {
 	// Reset all state
 	ResetSearchState();
@@ -25,7 +25,6 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 	// Assign parameters
 	a = &a_;
 	b = &b_;
-	maxSearches = maxSearches_ ? maxSearches_ : std::numeric_limits<size_t>::max();
 
 	// Compute column sums
 	std::vector<uint32_t> aColumnSum(n), bColumnSum(n);

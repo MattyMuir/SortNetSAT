@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SortNetSAT
 
 # === Create Executable ===
-add_executable(SortNetSAT "main.cpp"   "Timer.h"   "Prefixes/prefixes.h" "Prefixes/prefixes.cpp"   "Prefixes/WindowMinimizer.h" "Prefixes/WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp" "SimpleExtender.h" "SimpleExtender.cpp" "Extender.h" "Extender.cpp" "minisatutil.h" "minisatutil.cpp" "IncrementalExtender.h" "IncrementalExtender.cpp" "Prefixes/PrefixGenerator.h" "Prefixes/PrefixGenerator.cpp" "Prefixes/PrefixGeneratorV2.h" "Prefixes/PrefixGeneratorV2.cpp" "Prefixes/NetworkGraph.h" "Prefixes/NetworkGraph.cpp"   "Prefixes/LayerDAG.h" "Prefixes/LayerDAG.cpp"   "Prefixes/PrefixGraph.h" "Prefixes/PrefixGraph.cpp" "Prefixes/PrefixGeneratorV3.h" "Prefixes/PrefixGeneratorV3.cpp" "Prefixes/KosarajuSolver.h" "Prefixes/KosarajuSolver.cpp"   "Prefixes/GraphvizSerializer.h" "Prefixes/GraphvizSerializer.cpp"     "Prefixes/IsomorphicOutputSet.h" "Prefixes/IsomorphicOutputSet.cpp" "Prefixes/SubsumptionSolver.h" "Prefixes/SubsumptionSolver.cpp")
+add_executable(SortNetSAT "main.cpp"   "Timer.h"   "Prefixes/prefixes.h" "Prefixes/prefixes.cpp"   "Prefixes/WindowMinimizer.h" "Prefixes/WindowMinimizer.cpp" "FormulaGenerator.h" "FormulaGenerator.cpp" "Expression.h" "Expression.cpp" "clause.h" "clause.cpp" "SimpleExtender.h" "SimpleExtender.cpp" "Extender.h" "Extender.cpp" "minisatutil.h" "minisatutil.cpp" "IncrementalExtender.h" "IncrementalExtender.cpp" "Prefixes/PrefixGenerator.h" "Prefixes/PrefixGenerator.cpp" "OldPrefixes/PrefixGeneratorV2.h" "OldPrefixes/PrefixGeneratorV2.cpp" "OldPrefixes/NetworkGraph.h" "OldPrefixes/NetworkGraph.cpp"   "OldPrefixes/LayerDAG.h" "OldPrefixes/LayerDAG.cpp"   "OldPrefixes/PrefixGraph.h" "OldPrefixes/PrefixGraph.cpp" "OldPrefixes/PrefixGeneratorV3.h" "OldPrefixes/PrefixGeneratorV3.cpp" "OldPrefixes/KosarajuSolver.h" "OldPrefixes/KosarajuSolver.cpp"   "OldPrefixes/GraphvizSerializer.h" "OldPrefixes/GraphvizSerializer.cpp"     "OldPrefixes/IsomorphicOutputSet.h" "OldPrefixes/IsomorphicOutputSet.cpp" "Prefixes/SubsumptionSolver.h" "Prefixes/SubsumptionSolver.cpp" "BS/BS_thread_pool.hpp"   "Prefixes/PrefixGeneratorV4.h" "Prefixes/PrefixGeneratorV4.cpp" "Prefixes/NetworkSignature.h" "Prefixes/NetworkSignature.cpp")
 
 # === Libraries ===
 find_package(sortnetutils REQUIRED)
@@ -17,6 +17,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(SortNetSAT PUBLIC Threads::Threads)
 
 # === Feature Enables ===
+target_include_directories(SortNetSAT PRIVATE ".")
 if (SNS_MSVC_STATIC_RUNTIME)
     set_property(TARGET SortNetSAT PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()

@@ -17,16 +17,16 @@ protected:
 	class SearchLimitReached {};
 
 public:
-	SubsumptionSolver(uint8_t n_, bool symmetric_);
+	SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_);
 
-	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_, size_t maxSearches_ = 0);
+	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_);
 
 protected:
 	// === Parameters ===
 	uint8_t n;
 	bool symmetric;
-	const std::vector<uint64_t>*a, *b;
 	size_t maxSearches;
+	const std::vector<uint64_t>*a, *b;
 
 	// === Search State ===
 	// domains[src] stores a mask of destination bits that 'src' can be mapped to under permutation

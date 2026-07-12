@@ -6,7 +6,7 @@
 #include <map>
 
 #include "NetworkGraph.h"
-#include "prefixes.h"
+#include "../Prefixes/prefixes.h"
 
 PrefixGeneratorV2::PrefixGeneratorV2(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_), layerDAG(n, symmetric) {}

@@ -1,6 +1,6 @@
 #include "PrefixGeneratorV3.h"
 
-#include "prefixes.h"
+#include "../Prefixes/prefixes.h"
 #include "../Timer.h"
 
 PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)

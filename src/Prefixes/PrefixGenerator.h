@@ -2,15 +2,20 @@
 #include <optional>
 
 #include <sortnetutils.h>
+#include "BS/BS_thread_pool.hpp"
 
 #include "SubsumptionSolver.h"
 
 class PrefixGenerator
 {
 protected:
+	struct ThreadStatus
+	{
+		double progress;
+	};
+
 	struct NetworkSignature
 	{
-		size_t numOutputs;
 		size_t popcountSum;
 		std::vector<size_t> t2, t3z, t3o, t5, t6;
 		std::vector<std::vector<size_t>> t5c;
@@ -19,6 +24,7 @@ protected:
 	struct NetworkMeta
 	{
 		Network prefix;
+		size_t numOutputs;
 		std::optional<std::vector<uint64_t>> outputs = std::nullopt;
 		std::optional<NetworkSignature> signature = std::nullopt;
 	};
@@ -32,22 +38,23 @@ public:
 protected:
 	uint8_t n, d;
 	bool symmetric;
+	BS::thread_pool<BS::tp::none> pool;
+	std::unordered_map<std::thread::id, ThreadStatus> status;
 
 	std::vector<Network> allLayers;
-	std::vector<NetworkMeta> prefixes;
-	SubsumptionSolver solver;
-
+	std::vector<NetworkMeta> allPrefixes;
 	std::vector<double> timings;
 
 	// Generating
 	void Generate(bool isFirst);
-	void SortByOutputs();
+	void SortByOutputs(std::vector<size_t>& idxs);
 
 	// Pruning
-	bool IsAlreadyRepresented(const NetworkMeta& prefix, const std::vector<size_t>& representatives, size_t maxSearches);
 	void CacheOutputs(NetworkMeta& network);
 	static void ClearCache(NetworkMeta& network);
-	void Prune(size_t maxSearches = 0);
+	void Prune(std::vector<size_t>& idxs, size_t maxSearches = 0);
+	void Remove(std::vector<size_t>& si, const std::vector<size_t>& sj, size_t maxSearches = 0);
+	void ParallelPrune(std::vector<size_t>& idxs, size_t maxSearches = 0);
 
 	// Signatures
 	std::vector<std::vector<uint64_t>> SplitIntoClusters(const std::vector<uint64_t>& outputs) const;
@@ -57,8 +64,8 @@ protected:
 
 	// Prechecking
 	bool TPrecheck(const std::vector<size_t>& at, const std::vector<size_t>& bt, size_t aSize, size_t bSize) const;
-	SubsumptionResult SignaturePrecheck(const NetworkSignature& aSig, const NetworkSignature& bSig) const;
+	SubsumptionResult SignaturePrecheck(const NetworkMeta& a, const NetworkMeta& b) const;
 
 	// Subsumption
-	bool Subsumes(const NetworkMeta& a, const NetworkMeta& b, size_t maxSearches);
+	bool Subsumes(const NetworkMeta& a, const NetworkMeta& b, SubsumptionSolver& solver);
 };

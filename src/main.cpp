@@ -10,12 +10,13 @@
 #include "SimpleExtender.h"
 #include "IncrementalExtender.h"
 #include "Prefixes/PrefixGenerator.h"
-#include "Prefixes/PrefixGeneratorV2.h"
-#include "Prefixes/PrefixGeneratorV3.h"
-#include "Prefixes/LayerDAG.h"
+#include "OldPrefixes/PrefixGeneratorV2.h"
+#include "OldPrefixes/PrefixGeneratorV3.h"
+#include "OldPrefixes/LayerDAG.h"
 #include "Prefixes/WindowMinimizer.h"
-#include "Prefixes/NetworkGraph.h"
+#include "OldPrefixes/NetworkGraph.h"
 #include "Prefixes/SubsumptionSolver.h"
+#include "Prefixes/PrefixGeneratorV4.h"
 
 void FractionBenchmark()
 {
@@ -189,30 +190,7 @@ void Add(std::vector<double>& vec1, const std::vector<double>& vec2)
 int main()
 {
 	PrefixGenerator generator{ 12, 3, true };
+	TIMER(t);
 	generator.GeneratePrefixes();
-	std::println("{}", generator.GetTimings());
-	return 0;
-
-	uint8_t maxN = 14;
-	uint8_t maxDepth = 3;
-	size_t repeats = 3;
-
-	std::vector<std::vector<double>> allTimings(maxN / 2, std::vector<double>(maxDepth));
-
-	for (uint8_t n = 2; n <= maxN; n += 2)
-	{
-		for (size_t repeat = 0; repeat < repeats; repeat++)
-		{
-			PrefixGenerator generator{ n, maxDepth, true };
-			generator.GeneratePrefixes();
-			Add(allTimings[n / 2 - 1], generator.GetTimings());
-		}
-	}
-
-	for (uint8_t d = 1; d <= maxDepth; d++)
-	{
-		for (uint8_t n = 2; n <= maxN; n += 2)
-			std::print("{:.10f},", allTimings[n / 2 - 1][d - 1] / repeats);
-		std::println();
-	}
+	STOP_LOG(t);
 }
