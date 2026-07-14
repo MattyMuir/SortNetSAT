@@ -4,7 +4,8 @@ enum VertexType
 {
 	VertexComparator,
 	VertexMin,
-	VertexMax
+	VertexMax,
+	VertexPair,
 };
 
 static inline void AddEdge(bliss::Digraph& g, uint32_t source, uint32_t target, bool isMax)
@@ -15,14 +16,35 @@ static inline void AddEdge(bliss::Digraph& g, uint32_t source, uint32_t target, 
 	g.add_edge(intermediate, target);
 }
 
-NetworkGraph::NetworkGraph(const std::vector<Network>& layers, uint8_t n)
+NetworkGraph::NetworkGraph(const LayeredNetwork& network, uint8_t n, bool symmetric)
 {
 	bliss::Digraph g;
 
 	// Create all comparator vertices
-	for (const Network& layer : layers)
-		for (CE _ : layer)
+	for (const Network& layer : network)
+		for (const auto& _ : layer)
 			g.add_vertex(VertexComparator);
+
+	if (symmetric)
+	{
+		uint32_t ceIdxBase2 = 0;
+		for (const Network& layer : network)
+		{
+			for (size_t ceIdx = 0; ceIdx < layer.size(); ceIdx++)
+			{
+				auto [i, j] = layer[ceIdx];
+				if (i >= n - 1 - j) continue;
+
+				uint32_t pairVertex = g.add_vertex(VertexPair);
+				auto it = std::find(layer.begin(), layer.end(), CE{ (uint8_t)(n - 1 - j), (uint8_t)(n - 1 - i) });
+				uint32_t otherCEIdx = ceIdxBase2 + std::distance(layer.begin(), it);
+
+				g.add_edge(pairVertex, ceIdxBase2 + ceIdx);
+				g.add_edge(pairVertex, otherCEIdx);
+			}
+			ceIdxBase2 += layer.size();
+		}
+	}
 
 	// 'channelSources' stores which comparator the value in each channel came from
 	constexpr uint32_t IsInput = 1ULL << 31;
@@ -31,7 +53,7 @@ NetworkGraph::NetworkGraph(const std::vector<Network>& layers, uint8_t n)
 	std::vector<uint32_t> channelSources(n, IsInput);
 
 	uint32_t ceIdxBase = 0;
-	for (const Network& layer : layers)
+	for (const Network& layer : network)
 	{
 		// Add edges from the previous layer to this one
 		for (uint32_t ceIdx = 0; ceIdx < layer.size(); ceIdx++)
@@ -58,18 +80,7 @@ NetworkGraph::NetworkGraph(const std::vector<Network>& layers, uint8_t n)
 	// Rewrite g in canonical form
 	bliss::Stats stats;
 	const uint32_t* perm = g.canonical_form(stats);
-	graph = g.permute(perm);
-}
-
-NetworkGraph::NetworkGraph(NetworkGraph&& other) noexcept
-	: graph(other.graph)
-{
-	other.graph = nullptr;
-}
-
-NetworkGraph::~NetworkGraph()
-{
-	delete graph;
+	graph = std::unique_ptr<bliss::Digraph>{ g.permute(perm) };
 }
 
 bool NetworkGraph::operator<(const NetworkGraph& other) const

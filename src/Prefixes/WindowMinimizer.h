@@ -8,12 +8,12 @@
 class WindowMinimizer
 {
 protected:
-	struct Permutation
+	struct PermOutputs
 	{
-		std::vector<uint8_t> perm;
+		Permutation perm;
 		std::vector<uint64_t> outputs;
 	};
-	using Population = std::multimap<uint64_t, Permutation>;
+	using Population = std::multimap<uint64_t, PermOutputs>;
 
 	struct BitswapMask
 	{
@@ -32,10 +32,10 @@ protected:
 	Population globalPopulation;
 	std::mt19937_64 gen;
 
-	void AddToPopulation(Population& population, const Permutation& perm) const;
+	void AddToPopulation(Population& population, const PermOutputs& perm) const;
 	void AddToPopulation(Population& population, const Network& prefix) const;
 	BitswapMask GetBitswapMask(uint8_t ch0, uint8_t ch1) const;
 	static uint64_t Bitswap(uint64_t x, const BitswapMask& mask);
 	std::pair<uint8_t, uint8_t> RandomPair(uint8_t max);
-	Permutation RandomSwap(const Permutation& perm);
+	PermOutputs RandomSwap(const PermOutputs& perm);
 };

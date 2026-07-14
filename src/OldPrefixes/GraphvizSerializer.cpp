@@ -50,7 +50,7 @@ void GraphvizSerializer::WriteVertexLabels()
 {
     for (size_t idx = 0; idx < graph.nextVertexIdx; idx++)
     {
-        const PrefixGraph::Prefix& prefix = graph.idxToPrefix[idx];
+        const LayeredNetwork& prefix = graph.idxToPrefix[idx];
         std::string label;
         for (size_t li = 0; li < prefix.size(); li++)
         {
@@ -140,11 +140,7 @@ GraphvizSerializer::RGB GraphvizSerializer::GetPrefixColor(const std::vector<Net
 
 GraphvizSerializer::RGB GraphvizSerializer::GetVertexColor(size_t idx)
 {
-#if 1
-    const PrefixGraph::Prefix& fullPrefix = graph.idxToPrefix[idx];
+    const LayeredNetwork& fullPrefix = graph.idxToPrefix[idx];
     std::vector<Network> prefix{ fullPrefix.begin(), fullPrefix.begin() + fullPrefix.size() - 1 };
     return GetPrefixColor(prefix);
-#else
-
-#endif
 }

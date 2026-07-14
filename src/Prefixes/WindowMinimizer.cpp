@@ -18,7 +18,7 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 		//std::print("Best: {:<10}\r", globalPopulation.begin()->first);
 
 		// Every member of the population has one child
-		std::multimap<uint64_t, Permutation> nextGeneration{ globalPopulation };
+		std::multimap<uint64_t, PermOutputs> nextGeneration{ globalPopulation };
 		for (const auto& [_, perm] : globalPopulation)
 			AddToPopulation(nextGeneration, RandomSwap(perm));
 
@@ -32,11 +32,11 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 	}
 
 	Network optPrefix{ initialPrefix };
-	Permute(optPrefix, globalPopulation.begin()->second.perm);
+	optPrefix.Permute(globalPopulation.begin()->second.perm);
 	return optPrefix;
 }
 
-void WindowMinimizer::AddToPopulation(Population& population, const Permutation& perm) const
+void WindowMinimizer::AddToPopulation(Population& population, const PermOutputs& perm) const
 {
 	uint64_t windowWidth = WindowWidth(n, perm.outputs, symmetric);
 	population.emplace(windowWidth, perm);
@@ -44,8 +44,8 @@ void WindowMinimizer::AddToPopulation(Population& population, const Permutation&
 
 void WindowMinimizer::AddToPopulation(Population& population, const Network& prefix) const
 {
-	Permutation perm{
-		std::vector<uint8_t>(n),
+	PermOutputs perm{
+		Permutation(n),
 		FactoredOutputSet{ prefix, n }.ToVector()
 	};
 	std::iota(perm.perm.begin(), perm.perm.end(), 0);
@@ -91,13 +91,13 @@ std::pair<uint8_t, uint8_t> WindowMinimizer::RandomPair(uint8_t max)
 	return { a, (b == a) ? max - 1U : b };
 }
 
-WindowMinimizer::Permutation WindowMinimizer::RandomSwap(const Permutation& perm)
+WindowMinimizer::PermOutputs WindowMinimizer::RandomSwap(const PermOutputs& perm)
 {
 	// Generate random channels to swap
 	auto [ch0, ch1] = RandomPair(n);
 
 	// Swap those channels in the permutation
-	Permutation ret{ perm };
+	PermOutputs ret{ perm };
 	std::swap(ret.perm[ch0], ret.perm[ch1]);
 	if (symmetric && ch0 + ch1 != n - 1)
 		std::swap(ret.perm[n - 1 - ch1], ret.perm[n - 1 - ch0]);

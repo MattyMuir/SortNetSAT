@@ -13,30 +13,28 @@ PrefixGeneratorV2::PrefixGeneratorV2(uint8_t n_, uint8_t d_, bool symmetric_)
 
 std::vector<Network> PrefixGeneratorV2::GeneratePrefixes()
 {
-	Prefix initialPrefix{ PrefixPar(n) };
-	allPrefixes.push_back(initialPrefix);
+	LayeredNetwork firstLayer;
+	firstLayer += PrefixPar(n);
+	allPrefixes.push_back(firstLayer);
+
 	for (uint8_t k = 1; k < d; k++)
 		Generate();
 
 	std::vector<Network> ret;
-	for (const Prefix& prefix : allPrefixes)
-	{
-		Network network;
-		for (const Network& layer : prefix)
-			Append(network, layer);
-		ret.push_back(network);
-	}
+	ret.reserve(allPrefixes.size());
+	for (const LayeredNetwork& prefix : allPrefixes)
+		ret.emplace_back(prefix);
 	return ret;
 }
 
 void PrefixGeneratorV2::Generate()
 {
-	std::map<NetworkGraph, Prefix> nextAllPrefixes;
+	std::map<NetworkGraph, LayeredNetwork> nextAllPrefixes;
 
-	for (const Prefix& partialPrefix : allPrefixes)
+	for (const LayeredNetwork& partialPrefix : allPrefixes)
 	{
 		// Get prefix outputs
-		Network prefixConcat = Concatenate(partialPrefix);
+		Network prefixConcat{ partialPrefix };
 		auto outputsVec = GetOutputs(prefixConcat, n);
 		std::unordered_set<uint64_t> outputSet;
 		outputSet.insert(outputsVec.begin(), outputsVec.end());
@@ -51,14 +49,14 @@ void PrefixGeneratorV2::Generate()
 
 		for (const Network& layer : saturatedLayers)
 		{
-			Prefix newPrefix{ partialPrefix };
+			LayeredNetwork newPrefix{ partialPrefix };
 			newPrefix.push_back(layer);
 			nextAllPrefixes.emplace(NetworkGraph{ newPrefix, n }, newPrefix);
 		}
 
 		for (const Network& layer : unsaturatedLayers)
 		{
-			Prefix newPrefix{ partialPrefix };
+			LayeredNetwork newPrefix{ partialPrefix };
 			newPrefix.push_back(layer);
 			nextAllPrefixes.erase(NetworkGraph{ newPrefix, n });
 		}

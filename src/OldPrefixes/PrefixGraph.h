@@ -9,8 +9,6 @@
 class PrefixGraph
 {
 protected:
-	using Prefix = std::vector<Network>;
-
 	struct Vertex
 	{
 		size_t idx;
@@ -31,12 +29,12 @@ public:
 	PrefixGraph(PrefixGraph&& other) = delete;
 	~PrefixGraph();
 
-	void AddPrefix(const Prefix& prefix);
+	void AddPrefix(const LayeredNetwork& prefix);
 	void AddIsomorphicOutputsEdges();
 	void AddSubsetEdges();
 	void AddOutputEdges();
 
-	std::vector<Prefix> GetRepresentatives() const;
+	std::vector<LayeredNetwork> GetRepresentatives() const;
 
 	void SaveGraphviz(const std::string& filepath) const;
 
@@ -45,9 +43,9 @@ protected:
 	bool symmetric;
 
 	size_t nextVertexIdx = 0;
-	std::map<Prefix, size_t> prefixToIdx;
+	std::map<LayeredNetwork, size_t> prefixToIdx;
 	std::vector<Vertex*> idxToVertex;
-	std::vector<Prefix> idxToPrefix;
+	std::vector<LayeredNetwork> idxToPrefix;
 	std::map<std::pair<size_t, size_t>, EdgeType> edgeTypes;
 	size_t numVerticesProcessed = 0;
 

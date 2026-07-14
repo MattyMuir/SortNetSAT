@@ -11,11 +11,11 @@ bool IsomorphicOutputSet::OutputsKeyEq::operator()(const OutputsKey& aKey, const
 {
 	if (aKey.hash != bKey.hash) return false;
 
-	OutputSet aOutputs = GetOutputs(Concatenate(*aKey.prefix), aKey.canonicalPerm.size());
-	OutputSet bOutputs = GetOutputs(Concatenate(*bKey.prefix), bKey.canonicalPerm.size());
+	OutputSet aOutputs = GetOutputs(Network{ *aKey.prefix }, aKey.canonicalPerm.size());
+	OutputSet bOutputs = GetOutputs(Network{ *bKey.prefix }, bKey.canonicalPerm.size());
 
-	OutputSet aOutputsCanonical = Permute(aOutputs, aKey.canonicalPerm);
-	OutputSet bOutputsCanonical = Permute(bOutputs, bKey.canonicalPerm);
+	OutputSet aOutputsCanonical = OutputSet::Permute(aOutputs, aKey.canonicalPerm);
+	OutputSet bOutputsCanonical = OutputSet::Permute(bOutputs, bKey.canonicalPerm);
 
 	return aOutputsCanonical == bOutputsCanonical;
 }
@@ -26,9 +26,9 @@ IsomorphicOutputSet::IsomorphicOutputSet(uint8_t n_)
 void IsomorphicOutputSet::Insert(const LayeredNetwork* prefix, size_t idx)
 {
 	// Compute the canonical permutation of these outputs
-	OutputSet outputs = GetOutputs(Concatenate(*prefix), n);
-	std::vector<uint8_t> canonicalPerm = GetCanonicalPermutation(outputs);
-	OutputSet outputsCanonical = Permute(outputs, canonicalPerm);
+	OutputSet outputs = GetOutputs(Network{ *prefix }, n);
+	Permutation canonicalPerm = GetCanonicalPermutation(outputs);
+	OutputSet outputsCanonical = OutputSet::Permute(outputs, canonicalPerm);
 	size_t hash = OutputSetHasher{}(outputsCanonical);
 
 	// Insert into map
@@ -55,7 +55,7 @@ std::vector<std::vector<size_t>> IsomorphicOutputSet::GetEquivalenceClasses() co
 	return equivalenceClasses;
 }
 
-std::vector<uint8_t> IsomorphicOutputSet::GetCanonicalPermutation(const OutputSet& outputs) const
+Permutation IsomorphicOutputSet::GetCanonicalPermutation(const OutputSet& outputs) const
 {
 	enum VertexType
 	{
@@ -98,10 +98,11 @@ std::vector<uint8_t> IsomorphicOutputSet::GetCanonicalPermutation(const OutputSe
 	const uint32_t* u32perm = g.canonical_form(stats);
 
 	// Convert the permutation from uint32's to uint8's
-	std::vector<uint8_t> u8perm(n);
+	Permutation u8perm(n);
 	for (size_t i = 0; i < n; i++)
 		u8perm[i] = u32perm[i];
 
 	// bliss uses the 'scatter' permutation convention so we have to invert it
-	return InvertPerm(u8perm);
+	u8perm.Invert();
+	return u8perm;
 }

@@ -5,10 +5,7 @@
 class NetworkGraph
 {
 public:
-	NetworkGraph(const std::vector<Network>& layers, uint8_t n);
-	NetworkGraph(const NetworkGraph& other) = delete;
-	NetworkGraph(NetworkGraph&& other) noexcept;
-	~NetworkGraph();
+	NetworkGraph(const LayeredNetwork& network, uint8_t n, bool symmetric = false);
 
 	bool operator<(const NetworkGraph& other) const;
 	bool operator==(const NetworkGraph& other) const;
@@ -16,5 +13,5 @@ public:
 	uint32_t GetHash() const;
 
 protected:
-	bliss::Digraph* graph;
+	std::unique_ptr<bliss::Digraph> graph;
 };

@@ -50,8 +50,8 @@ Network SimpleExtender::GetNetwork() const
 	Network postfix = generator.ParseAssignment(assignment);
 
 	// Append postfix to prefix and untangle
-	Network network = Concatenate(optimizedPrefix, postfix);
-	Untangle(network, n);
+	Network network = optimizedPrefix + postfix;
+	network.Untangle();
 	return network;
 }
 

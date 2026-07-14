@@ -156,7 +156,7 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
 	for (uint64_t ax : *a)
 	{
 		uint64_t bitCount = std::popcount(ax);
-		uint64_t pattern = _pext_u64(Permute(ax, perm), dstMask);
+		uint64_t pattern = _pext_u64(perm(ax), dstMask);
 		uint8_t patternCount = patternCounts[bitCount][pattern];
 
 		if (!patternCount)

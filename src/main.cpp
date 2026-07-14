@@ -124,73 +124,9 @@ void GenerateCactusPlot()
 	for (double t : times) std::println("{:.3f}", t);
 }
 
-bool AreIsomorphicV1(const Network& a, const Network& b, uint8_t n)
-{
-	NetworkGraph ga{ GetLayers(a), n };
-	NetworkGraph gb{ GetLayers(b), n };
-	return ga == gb;
-}
-
-static inline bool IsSymmetric(const std::vector<uint8_t>& perm)
-{
-	uint8_t n = (uint8_t)perm.size();
-
-	for (uint8_t dst = 0; dst < n; dst++)
-	{
-		uint8_t src = perm[dst];
-
-		if (perm[n - 1 - dst] != n - 1 - src)
-			return false;
-	}
-
-	return true;
-}
-
-bool AreIsomorphicV2(const Network& a, const Network& b, uint8_t n, bool symmetric)
-{
-	if (a.size() != b.size()) return false;
-
-	std::vector<uint8_t> perm(n);
-	std::iota(perm.begin(), perm.end(), 0);
-
-	auto bLayers = GetLayers(b);
-	for (Network& layer : bLayers)
-		std::sort(layer.begin(), layer.end());
-
-	do
-	{
-		if (symmetric && !IsSymmetric(perm))
-			continue;
-
-		Network permuted{ a };
-		Permute(permuted, perm);
-		Untangle(permuted, n);
-
-		auto pLayers = GetLayers(permuted);
-		for (Network& layer : pLayers)
-			std::sort(layer.begin(), layer.end());
-
-		if (bLayers == pLayers)
-		{
-			std::println("{}", perm);
-			return true;
-		}
-
-	} while (std::next_permutation(perm.begin(), perm.end()));
-
-	return false;
-}
-
-void Add(std::vector<double>& vec1, const std::vector<double>& vec2)
-{
-	for (size_t i = 0; i < vec1.size(); i++)
-		vec1[i] += vec2[i];
-}
+void EquivTest();
 
 int main()
 {
-	PrefixGenerator generator{ 12, 3, true };
-	TIMER(t);
-	generator.GeneratePrefixes();
-	STOP_LOG(t);
+	EquivTest();
 }

@@ -32,7 +32,7 @@ protected:
 	// domains[src] stores a mask of destination bits that 'src' can be mapped to under permutation
 	std::vector<uint64_t> initialDomains;
 	// Working permutation using the 'gather' convention
-	std::vector<uint8_t> perm;
+	Permutation perm;
 	// Counts the number of each pattern, in unary (to avoid overflow)
 	std::vector<std::vector<uint8_t>> patternCounts;
 	// Stores a representative element in b for each pattern

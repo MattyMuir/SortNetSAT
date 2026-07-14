@@ -16,7 +16,7 @@ protected:
 
 	std::vector<CE> alphabet;
 	std::vector<Network> allLayers;
-	std::vector<std::vector<Network>> allPrefixes;
+	std::vector<LayeredNetwork> allPrefixes;
 
 	bool CanAddCE(const Network& layer, CE ce) const;
 	Network AddCE(const Network& layer, CE ce) const;

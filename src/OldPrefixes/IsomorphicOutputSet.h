@@ -9,7 +9,7 @@ protected:
 	struct OutputsKey
 	{
 		const LayeredNetwork* prefix;
-		std::vector<uint8_t> canonicalPerm;
+		Permutation canonicalPerm;
 		size_t hash;
 	};
 
@@ -36,5 +36,5 @@ protected:
 	uint8_t n;
 	std::unordered_map<OutputsKey, std::vector<size_t>, OutputsKeyHasher, OutputsKeyEq> map;
 
-	std::vector<uint8_t> GetCanonicalPermutation(const OutputSet& outputs) const;
+	Permutation GetCanonicalPermutation(const OutputSet& outputs) const;
 };

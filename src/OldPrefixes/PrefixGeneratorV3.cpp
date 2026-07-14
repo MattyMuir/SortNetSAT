@@ -25,21 +25,17 @@ PrefixGeneratorV3::PrefixGeneratorV3(uint8_t n_, uint8_t d_, bool symmetric_)
 
 std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 {
-	allPrefixes.push_back({ PrefixPar(n) });
+	LayeredNetwork firstLayer;
+	firstLayer += PrefixPar(n);
+	allPrefixes.push_back(firstLayer);
 
 	for (uint8_t k = 1; k < d; k++)
 	{
 		// Extend all current prefixes by all possible layers and add to graph
 		PrefixGraph graph{ n, symmetric };
 		for (const auto& partialPrefix : allPrefixes)
-		{
 			for (const Network& layer : allLayers)
-			{
-				std::vector<Network> extPrefix{ partialPrefix };
-				extPrefix.push_back(layer);
-				graph.AddPrefix(extPrefix);
-			}
-		}
+				graph.AddPrefix(partialPrefix + layer);
 
 		// Determine inextendible implication edges
 		graph.AddIsomorphicOutputsEdges();
@@ -54,7 +50,7 @@ std::vector<Network> PrefixGeneratorV3::GeneratePrefixes()
 	std::vector<Network> prefixesConcat;
 	prefixesConcat.reserve(allPrefixes.size());
 	for (const auto& prefix : allPrefixes)
-		prefixesConcat.push_back(Concatenate(prefix));
+		prefixesConcat.emplace_back(prefix);
 	return prefixesConcat;
 }
 

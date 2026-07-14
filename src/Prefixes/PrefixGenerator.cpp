@@ -49,6 +49,7 @@ std::vector<Network> PrefixGenerator::GeneratePrefixes()
 
 	// Strip the metadata from prefixes
 	std::vector<Network> noMeta;
+	noMeta.reserve(allPrefixes.size());
 	for (auto& networkMeta : allPrefixes)
 		noMeta.emplace_back(std::move(networkMeta.prefix));
 	return noMeta;
@@ -72,7 +73,7 @@ void PrefixGenerator::Generate(bool isFirst)
 				continue;
 
 			// Compute the new extended prefix
-			Network extended = Concatenate(partial.prefix, layer);
+			Network extended = partial.prefix + layer;
 
 			// Skip redundant networks
 			FactoredOutputSet outputs{ extended, n };
@@ -276,7 +277,6 @@ std::vector<size_t> PrefixGenerator::T6Signature(const std::vector<uint64_t>& ou
 PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const std::vector<uint64_t>& outputs) const
 {
 	// === T1 Signature ===
-	size_t numOutputs = outputs.size();
 	size_t popcountSum = 0;
 	for (uint64_t output : outputs)
 		popcountSum += std::popcount(output);
@@ -305,6 +305,7 @@ PrefixGenerator::NetworkSignature PrefixGenerator::ComputeSignature(const std::v
 	// === T5 Signature ===
 	std::vector<size_t> t5 = T5Signature(outputs);
 	std::vector<std::vector<size_t>> t5c;
+	t5c.reserve(n + 1);
 	for (const auto& cluster : clusters)
 		t5c.push_back(T5Signature(cluster));
 

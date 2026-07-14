@@ -64,10 +64,7 @@ bool NetworkSignature::operator>(const NetworkSignature& other) const
 			return true;
 
 	// === T6 Signature ===
-	if (TGreater(Get(T6), other.Get(T6), Get(PopcountSum)[0], other.Get(PopcountSum)[0]))
-		return true;
-
-	return false;
+	return TGreater(Get(T6), other.Get(T6), Get(PopcountSum)[0], other.Get(PopcountSum)[0]);
 }
 
 std::pair<size_t, size_t> NetworkSignature::GetDim(SignatureType sig) const

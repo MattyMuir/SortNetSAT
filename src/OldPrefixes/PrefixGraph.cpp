@@ -19,14 +19,14 @@ PrefixGraph::~PrefixGraph()
 		delete vertex;
 }
 
-void PrefixGraph::AddPrefix(const Prefix& prefix)
+void PrefixGraph::AddPrefix(const LayeredNetwork& prefix)
 {
 	// Create new vertex and increment nextVertexIdx
 	size_t idx = nextVertexIdx++;
 	Vertex* vertex = new Vertex{ idx, false, {}, {} };
 
 	// Sort network to ensure correct map lookup
-	Prefix sortedPrefix{ prefix };
+	LayeredNetwork sortedPrefix{ prefix };
 	for (Network& layer : sortedPrefix)
 		std::sort(layer.begin(), layer.end());
 
@@ -115,8 +115,8 @@ void PrefixGraph::AddSubsetEdges()
 		{
 			if (idx1 == idx2) continue;
 
-			OutputSet outputs1 = GetOutputs(Concatenate(idxToPrefix[idx1]), n);
-			OutputSet outputs2 = GetOutputs(Concatenate(idxToPrefix[idx2]), n);
+			OutputSet outputs1 = GetOutputs(Network{ idxToPrefix[idx1] }, n);
+			OutputSet outputs2 = GetOutputs(Network{ idxToPrefix[idx2] }, n);
 
 			if (outputs1 == outputs2 || StrictSubset(outputs1, outputs2))
 				AddEdge(idxToVertex[idx1], idxToVertex[idx2], SubsetEdge);
@@ -135,11 +135,11 @@ void PrefixGraph::AddOutputEdges()
 	for (Vertex* vertex : idxToVertex)
 	{
 		// Check if this node is a 'root' (has an empty final layer)
-		const Prefix& prefix = idxToPrefix[vertex->idx];
+		const LayeredNetwork& prefix = idxToPrefix[vertex->idx];
 		if (!prefix.back().empty()) continue;
 
 		// Compute outputs from scratch
-		FactoredOutputSet outputs{ Concatenate(prefix), n };
+		FactoredOutputSet outputs{ Network{ prefix }, n };
 
 		// DFS into all children
 		AddOutputEdges(vertex, outputs);
@@ -147,7 +147,7 @@ void PrefixGraph::AddOutputEdges()
 	STOP_LOG(addOutputEdges);
 }
 
-std::vector<PrefixGraph::Prefix> PrefixGraph::GetRepresentatives() const
+std::vector<LayeredNetwork> PrefixGraph::GetRepresentatives() const
 {
 	TIMER(getRepresentatives);
 	// Extract strongly-connected components from the graph
@@ -168,12 +168,12 @@ std::vector<PrefixGraph::Prefix> PrefixGraph::GetRepresentatives() const
 				hasIncoming[idxToComponent[outChild->idx]] = true;
 
 	// Take one representative from each SCC with no incoming edges
-	std::vector<Prefix> representatives;
+	std::vector<LayeredNetwork> representatives;
 	for (size_t sccIdx = 0; sccIdx < sccs.size(); sccIdx++)
 	{
 		if (hasIncoming[sccIdx]) continue;
 		size_t representativeIdx = *sccs[sccIdx].begin();
-		const Prefix& prefix = idxToPrefix[representativeIdx];
+		const LayeredNetwork& prefix = idxToPrefix[representativeIdx];
 		representatives.push_back(prefix);
 	}
 
@@ -199,7 +199,7 @@ void PrefixGraph::AddEdge(Vertex* a, Vertex* b, EdgeType type)
 std::vector<std::pair<PrefixGraph::Vertex*, CE>> PrefixGraph::GetExtensions(Vertex* vertex) const
 {
 	// Determine which channels are used in this prefix
-	const Prefix& prefix = idxToPrefix[vertex->idx];
+	const LayeredNetwork& prefix = idxToPrefix[vertex->idx];
 	uint64_t usedChannels = 0;
 	for (auto [lo, hi] : prefix.back())
 		usedChannels |= (1ULL << lo) | (1ULL << hi);
@@ -217,7 +217,7 @@ std::vector<std::pair<PrefixGraph::Vertex*, CE>> PrefixGraph::GetExtensions(Vert
 			if (usedChannels & ceMask) continue;
 
 			// Create the extended prefix by adding this CE
-			Prefix extPrefix{ prefix };
+			LayeredNetwork extPrefix{ prefix };
 			extPrefix.back().push_back({ i, j });
 			if (symmetric && i != n - 1 - j)
 				extPrefix.back().push_back({ (uint8_t)(n - 1 - j), (uint8_t)(n - 1 - i) });

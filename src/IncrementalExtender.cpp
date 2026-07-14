@@ -52,9 +52,8 @@ bool IncrementalExtender::Extend()
 Network IncrementalExtender::GetNetwork() const
 {
 	// Append postfix to prefix and untangle
-	Network postfix = ReconstructPostfix();
-	Network network = Concatenate(optimizedPrefix, postfix);
-	Untangle(network, n);
+	Network network = optimizedPrefix + ReconstructPostfix();
+	network.Untangle();
 	return network;
 }
 
@@ -76,7 +75,7 @@ std::vector<IncrementalExtender::FailingInput> IncrementalExtender::GetFailingIn
 	for (size_t i = 0; i < excludedInputs.size(); i++)
 	{
 		uint64_t input = excludedInputs[i];
-		uint64_t output = RunNetwork(postfix, input);
+		uint64_t output = postfix(input);
 		if (!IsSorted(n, output))
 			failing.push_back({ i, output });
 	}

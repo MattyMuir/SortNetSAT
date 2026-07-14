@@ -7,9 +7,6 @@
 
 class PrefixGeneratorV2
 {
-protected:
-	using Prefix = std::vector<Network>;
-
 public:
 	PrefixGeneratorV2(uint8_t n_, uint8_t d_, bool symmetric_);
 
@@ -20,7 +17,7 @@ protected:
 	bool symmetric;
 
 	LayerDAG layerDAG;
-	std::vector<Prefix> allPrefixes;
+	std::vector<LayeredNetwork> allPrefixes;
 
 	void Generate();
 };
