@@ -20,11 +20,12 @@ enum SignatureType : size_t
 class NetworkSignature
 {
 public:
-	NetworkSignature() = default;
-	NetworkSignature(const std::vector<uint64_t>& outputs, uint8_t n_);
-	bool operator>(const NetworkSignature& other) const;
+	NetworkSignature(uint8_t n);
 
+	void Construct(const std::vector<uint64_t>& outputs);
 	void Free();
+
+	bool operator>(const NetworkSignature& other) const;
 
 protected:
 	uint8_t n;

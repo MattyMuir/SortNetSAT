@@ -4,29 +4,11 @@
 
 #include <sortnetutils.h>
 
-#include "NetworkSignature.h"
 #include "SubsumptionSolver.h"
+#include "PrefixDescriptor.h"
 
 class PrefixGeneratorV4
 {
-protected:
-	struct Descriptor
-	{
-		size_t prevIdx, layerIdx, numOutputs;
-	};
-
-	struct SignedDescriptor
-	{
-		SignedDescriptor() = default;
-		SignedDescriptor(size_t prevIdx_, size_t layerIdx_, const std::vector<uint64_t>& outputs, uint8_t n);
-
-		void MarkSubsumed();
-
-		size_t prevIdx, layerIdx;
-		NetworkSignature signature;
-		bool subsumed = false;
-	};
-
 public:
 	PrefixGeneratorV4(uint8_t n_, uint8_t d_, bool symmetric_);
 
@@ -45,19 +27,16 @@ protected:
 	std::vector<FactoredOutputSet> prevOutputs;
 
 	// Pruning state
-	std::vector<Descriptor> globalReps;
-	std::vector<SignedDescriptor> globalNewReps;
-	std::atomic<size_t> globalRepIdx, globalWriteIdx;
-	std::vector<std::atomic<bool>> slotFilled;
+	std::vector<PrefixDescriptor> globalPrefixes;
+	std::atomic<size_t> globalPrefixIdx;
 
 	void CachePreviousOutputs();
 	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx);
-	std::vector<Descriptor> Generate(bool isFirst);
-	void ForwardPrune(std::vector<Descriptor>& reps, size_t maxSearches);
+	void Generate(bool isFirst);
 
 	// Multi-threaded prune
 	void PruneWorker(size_t maxSearches);
-	void ForwardPruneMulti(std::vector<Descriptor>& reps, size_t maxSearches);
+	void ForwardPruneMulti(size_t maxSearches = 0);
 
-	std::vector<Network> ToNetworks(const std::vector<Descriptor>& reps);
+	std::vector<Network> GetAllPrefixes();
 };

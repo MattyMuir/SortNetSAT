@@ -3,15 +3,6 @@
 #include <print>
 #include <random>
 
-PrefixGeneratorV4::SignedDescriptor::SignedDescriptor(size_t prevIdx_, size_t layerIdx_, const std::vector<uint64_t>& outputs, uint8_t n)
-	: prevIdx(prevIdx_), layerIdx(layerIdx_), signature(outputs, n) {}
-
-void PrefixGeneratorV4::SignedDescriptor::MarkSubsumed()
-{
-	subsumed = true;
-	//signature.Free(); // At the moment, this is not safe... more thought required
-}
-
 PrefixGeneratorV4::PrefixGeneratorV4(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_), allLayers(GetAllLayers(n, symmetric)) {}
 
@@ -28,20 +19,20 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 	{
 		// Generation
 		CachePreviousOutputs();
-		auto newPrefixes = Generate(prevD == 0);
+		Generate(prevD == 0);
 
 		// Pruning phase 1
-		ForwardPruneMulti(newPrefixes, 100);
-		std::reverse(newPrefixes.begin(), newPrefixes.end());
-		ForwardPruneMulti(newPrefixes, 100);
+		ForwardPruneMulti(100);
+		std::reverse(globalPrefixes.begin(), globalPrefixes.end());
+		ForwardPruneMulti(100);
 
 		// Pruning phase 2
-		ForwardPruneMulti(newPrefixes, 0);
-		std::reverse(newPrefixes.begin(), newPrefixes.end());
-		ForwardPruneMulti(newPrefixes, 0);
+		ForwardPruneMulti();
+		std::reverse(globalPrefixes.begin(), globalPrefixes.end());
+		ForwardPruneMulti();
 
 		// Update prevPrefixes
-		prevPrefixes = ToNetworks(newPrefixes);
+		prevPrefixes = GetAllPrefixes();
 		prevD++;
 
 		// Logging
@@ -65,9 +56,10 @@ FactoredOutputSet PrefixGeneratorV4::GetOutputs(size_t prevIdx, size_t layerIdx)
 	return outputs;
 }
 
-std::vector<PrefixGeneratorV4::Descriptor> PrefixGeneratorV4::Generate(bool isFirst)
+void PrefixGeneratorV4::Generate(bool isFirst)
 {
-	std::vector<Descriptor> reps;
+	globalPrefixes.clear();
+
 	for (size_t layerIdx = 0; layerIdx < allLayers.size(); layerIdx++)
 	{
 		// Skip un-full layers for depth-1 prefixes
@@ -77,46 +69,9 @@ std::vector<PrefixGeneratorV4::Descriptor> PrefixGeneratorV4::Generate(bool isFi
 		{
 			FactoredOutputSet outputs = GetOutputs(prevIdx, layerIdx);
 			if (outputs.IsRedundant()) continue;
-			reps.emplace_back(prevIdx, layerIdx, outputs.Size());
+			globalPrefixes.emplace_back(prevIdx, layerIdx, n);
 		}
 	}
-
-	std::sort(reps.begin(), reps.end(), [](Descriptor a, Descriptor b) {
-		return a.numOutputs < b.numOutputs;
-		});
-	return reps;
-}
-
-void PrefixGeneratorV4::ForwardPrune(std::vector<Descriptor>& reps, size_t maxSearches)
-{
-	// Construct subsumption solver
-	SubsumptionSolver solver{ n, symmetric, maxSearches };
-
-	std::vector<SignedDescriptor> newReps;
-	for (auto [prevIdx, layerIdx, _] : reps)
-	{
-		// Construct signed descriptor
-		std::vector<uint64_t> outputsVec = GetOutputs(prevIdx, layerIdx).ToVector();
-		SignedDescriptor descriptor{ prevIdx, layerIdx, outputsVec, n };
-
-		// Erase existing representatives that this new one subsumes
-		std::erase_if(newReps, [&, this](const SignedDescriptor& rep) {
-			if (descriptor.signature > rep.signature)
-				return false;
-
-			// Run a full backtracking subsumption test
-			std::vector<uint64_t> repOutputs = GetOutputs(rep.prevIdx, rep.layerIdx).ToVector();
-			return (solver.Solve(outputsVec, repOutputs) == DoesSubsume);
-			});
-
-		// Add this prefix to newReps
-		newReps.emplace_back(std::move(descriptor));
-	}
-
-	// Update reps
-	reps.clear();
-	for (const SignedDescriptor& rep : newReps)
-		reps.emplace_back(rep.prevIdx, rep.layerIdx);
 }
 
 void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
@@ -124,46 +79,43 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 	SubsumptionSolver solver{ n, symmetric, maxSearches };
 	for (;;)
 	{
-		// Get the next prefix from globalReps
-		size_t repIdx = globalRepIdx++;
-		if (repIdx >= globalReps.size()) return;
-		auto [prevIdx, layerIdx, _] = globalReps[repIdx];
+		// Get the next prefix from globalPrefixes
+		size_t prefixIdx = globalPrefixIdx++;
+		if (prefixIdx >= globalPrefixes.size()) return;
+		PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
 
-		// Construct signed descriptor
-		std::vector<uint64_t> outputsVec = GetOutputs(prevIdx, layerIdx).ToVector();
-		SignedDescriptor descriptor{ prevIdx, layerIdx, outputsVec, n };
+		// Compute signature
+		std::vector<uint64_t> outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
+		descriptor.ComputeSignature(outputs);
+		auto guard = descriptor.AcquireGuard();
+		if (!guard) continue;
 
-		// Mark existing representatives as subsumed
-		for (size_t newRepIdx = 0; newRepIdx < globalWriteIdx; newRepIdx++)
+		// Check for subsumption in the range [0, prefixIdx)
+		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)
 		{
-			if (!slotFilled[newRepIdx]) continue;
+			PrefixDescriptor& otherDescriptor = globalPrefixes[otherPrefixIdx];
 
-			SignedDescriptor& newRep = globalNewReps[newRepIdx];
-			if (newRep.subsumed) continue;
-			if (descriptor.signature > newRep.signature) continue;
+			// Acquire a guard to access the signature
+			auto otherGuard = otherDescriptor.AcquireGuard();
+			if (!otherGuard) continue;
+
+			// Compare signatures and release guard
+			bool signaturePrecheck = (guard->Signature() > otherGuard->Signature());
+			otherGuard.reset();
+			if (signaturePrecheck) continue;
 
 			// Run a full backtracking subsumption test
-			std::vector<uint64_t> repOutputs = GetOutputs(newRep.prevIdx, newRep.layerIdx).ToVector();
-			if (solver.Solve(outputsVec, repOutputs) == DoesSubsume)
-				newRep.MarkSubsumed();
+			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
+			if (solver.Solve(outputs, otherOutputs) == DoesSubsume)
+				otherDescriptor.MarkSubsumedAndFree();
 		}
-
-		// Add this prefix to globalNewReps
-		size_t writeIdx = globalWriteIdx++;
-		globalNewReps[writeIdx] = std::move(descriptor);
-		slotFilled[writeIdx] = true;
 	}
 }
 
-void PrefixGeneratorV4::ForwardPruneMulti(std::vector<Descriptor>& reps, size_t maxSearches)
+void PrefixGeneratorV4::ForwardPruneMulti(size_t maxSearches)
 {
 	// Initialize global state
-	size_t numReps = reps.size();
-	globalReps = std::move(reps);
-	globalNewReps.resize(numReps);
-	globalRepIdx = 0;
-	globalWriteIdx = 0;
-	slotFilled = std::vector<std::atomic<bool>>(numReps);
+	globalPrefixIdx = 0;
 
 	// Launch worker threads
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
@@ -171,31 +123,29 @@ void PrefixGeneratorV4::ForwardPruneMulti(std::vector<Descriptor>& reps, size_t 
 	for (size_t i = 0; i < numThreads; i++)
 		threads.emplace_back([this, maxSearches]() { PruneWorker(maxSearches); });
 
+	// Logging
 	for (;;)
 	{
-		size_t repIdx = globalRepIdx;
-		if (repIdx >= globalReps.size()) break;
-		std::print("{:>7.3f}%\r", (double)repIdx / globalReps.size() * 100.0);
+		size_t progress = globalPrefixIdx;
+		if (progress >= globalPrefixes.size()) break;
+		std::print("{:>7.3f}%\r", (double)progress / globalPrefixes.size() * 100.0);
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 20 });
 	}
 
+	// Join all worker threads
 	for (auto& thread : threads) thread.join();
 
-	// Update reps
-	reps.clear();
-	for (size_t newRepIdx = 0; newRepIdx < globalWriteIdx; newRepIdx++)
-	{
-		const SignedDescriptor& newRep = globalNewReps[newRepIdx];
-		if (newRep.subsumed) continue;
-		reps.emplace_back(newRep.prevIdx, newRep.layerIdx);
-	}
+	// Erase subsumed prefixes from globalPrefixes
+	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
+		return descriptor.IsSubsumed();
+		});
 }
 
-std::vector<Network> PrefixGeneratorV4::ToNetworks(const std::vector<Descriptor>& reps)
+std::vector<Network> PrefixGeneratorV4::GetAllPrefixes()
 {
 	std::vector<Network> networks;
-	networks.reserve(reps.size());
-	for (const auto& descriptor : reps)
+	networks.reserve(globalPrefixes.size());
+	for (const auto& descriptor : globalPrefixes)
 		networks.push_back(prevPrefixes[descriptor.prevIdx] + allLayers[descriptor.layerIdx]);
 	return networks;
 }

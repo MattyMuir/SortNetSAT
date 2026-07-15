@@ -3,9 +3,13 @@
 #include <algorithm>
 #include <utility>
 
-NetworkSignature::NetworkSignature(const std::vector<uint64_t>& outputs, uint8_t n_)
-	: n(n_), data(std::make_unique<size_t[]>(GetOffset(_SignatureTypeEnd)))
+NetworkSignature::NetworkSignature(uint8_t n_)
+	: n(n_) {}
+
+void NetworkSignature::Construct(const std::vector<uint64_t>& outputs)
 {
+	data = std::make_unique<size_t[]>(GetOffset(_SignatureTypeEnd));
+
 	// === T1 Signature ===
 	Get(NumOutputs)[0] = outputs.size();
 
@@ -42,6 +46,11 @@ NetworkSignature::NetworkSignature(const std::vector<uint64_t>& outputs, uint8_t
 	T6Signature(Get(T6), outputs);
 }
 
+void NetworkSignature::Free()
+{
+	data.reset();
+}
+
 bool NetworkSignature::operator>(const NetworkSignature& other) const
 {
 	// === T1 Signature ===
@@ -65,11 +74,6 @@ bool NetworkSignature::operator>(const NetworkSignature& other) const
 
 	// === T6 Signature ===
 	return TGreater(Get(T6), other.Get(T6), Get(PopcountSum)[0], other.Get(PopcountSum)[0]);
-}
-
-void NetworkSignature::Free()
-{
-	data.reset();
 }
 
 std::pair<size_t, size_t> NetworkSignature::GetDim(SignatureType sig) const
