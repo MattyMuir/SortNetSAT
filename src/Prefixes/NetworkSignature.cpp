@@ -67,6 +67,11 @@ bool NetworkSignature::operator>(const NetworkSignature& other) const
 	return TGreater(Get(T6), other.Get(T6), Get(PopcountSum)[0], other.Get(PopcountSum)[0]);
 }
 
+void NetworkSignature::Free()
+{
+	data.reset();
+}
+
 std::pair<size_t, size_t> NetworkSignature::GetDim(SignatureType sig) const
 {
 	switch (sig)
