@@ -36,6 +36,7 @@ protected:
 
 	// Multi-threaded prune
 	void PruneWorker(size_t maxSearches);
+	void SanitizeGlobalPrefixes();
 	void ForwardPruneMulti(size_t maxSearches = 0);
 
 	std::vector<Network> GetAllPrefixes();

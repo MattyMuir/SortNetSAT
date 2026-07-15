@@ -63,6 +63,12 @@ void PrefixDescriptor::MarkSubsumedAndFree()
 	signature.Free();
 }
 
+void PrefixDescriptor::ForceReset()
+{
+	signature.Free();
+	state = Empty;
+}
+
 bool PrefixDescriptor::IsSubsumed() const
 {
 	return (state & StateMask) == Subsumed;

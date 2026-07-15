@@ -2,6 +2,7 @@
 
 #include <print>
 #include <random>
+#include <numeric>
 
 PrefixGeneratorV4::PrefixGeneratorV4(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_), allLayers(GetAllLayers(n, symmetric)) {}
@@ -56,10 +57,48 @@ FactoredOutputSet PrefixGeneratorV4::GetOutputs(size_t prevIdx, size_t layerIdx)
 	return outputs;
 }
 
+template <typename Ty, typename Proj>
+static inline void SortProjected(std::vector<Ty>& arr, const std::vector<Proj>& proj, bool reverse = false)
+{
+	// Initialize index array
+	size_t n = arr.size();
+	std::vector<std::size_t> idxs(n);
+	std::iota(idxs.begin(), idxs.end(), std::size_t{ 0 });
+
+	// Sort index array
+	std::sort(idxs.begin(), idxs.end(), [&proj, reverse](size_t idx0, size_t idx1) {
+		return reverse ? (proj[idx0] > proj[idx1]) : (proj[idx0] < proj[idx1]);
+		});
+
+	// Apply the permutation to arr in-place using cycle following
+	for (size_t i = 0; i < n; ++i)
+	{
+		// Check if element already correctly positioned
+		if (idxs[i] == i) continue;
+
+		Ty temp = std::move(arr[i]);
+		std::size_t j = i;
+
+		// Follow the cycle
+		while (idxs[j] != i)
+		{
+			size_t next = idxs[j];
+			arr[j] = std::move(arr[next]);
+			idxs[j] = j;
+			j = next;
+		}
+
+		// One final swap to close the cycle
+		arr[j] = std::move(temp);
+		idxs[j] = j;
+	}
+}
+
 void PrefixGeneratorV4::Generate(bool isFirst)
 {
 	globalPrefixes.clear();
 
+	std::vector<size_t> numOutputs;
 	for (size_t layerIdx = 0; layerIdx < allLayers.size(); layerIdx++)
 	{
 		// Skip un-full layers for depth-1 prefixes
@@ -70,8 +109,11 @@ void PrefixGeneratorV4::Generate(bool isFirst)
 			FactoredOutputSet outputs = GetOutputs(prevIdx, layerIdx);
 			if (outputs.IsRedundant()) continue;
 			globalPrefixes.emplace_back(prevIdx, layerIdx, n);
+			numOutputs.push_back(outputs.Size());
 		}
 	}
+
+	SortProjected(globalPrefixes, numOutputs, false);
 }
 
 void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
@@ -112,6 +154,18 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 	}
 }
 
+void PrefixGeneratorV4::SanitizeGlobalPrefixes()
+{
+	// Erase subsumed prefixes from globalPrefixes
+	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
+		return descriptor.IsSubsumed();
+		});
+
+	// Reset all descriptors
+	for (PrefixDescriptor& descriptor : globalPrefixes)
+		descriptor.ForceReset();
+}
+
 void PrefixGeneratorV4::ForwardPruneMulti(size_t maxSearches)
 {
 	// Initialize global state
@@ -135,10 +189,7 @@ void PrefixGeneratorV4::ForwardPruneMulti(size_t maxSearches)
 	// Join all worker threads
 	for (auto& thread : threads) thread.join();
 
-	// Erase subsumed prefixes from globalPrefixes
-	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
-		return descriptor.IsSubsumed();
-		});
+	SanitizeGlobalPrefixes();
 }
 
 std::vector<Network> PrefixGeneratorV4::GetAllPrefixes()
