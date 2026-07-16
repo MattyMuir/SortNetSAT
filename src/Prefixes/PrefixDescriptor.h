@@ -36,7 +36,7 @@ public:
 	size_t prevIdx, layerIdx;
 
 	void ComputeSignature(const std::vector<uint64_t>& outputs);
-	void MarkSubsumedAndFree();
+	void MarkSubsumed();
 	void ForceReset();
 
 	bool IsSubsumed() const;

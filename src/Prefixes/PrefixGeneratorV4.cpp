@@ -149,7 +149,7 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 			// Run a full backtracking subsumption test
 			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
 			if (solver.Solve(outputs, otherOutputs) == DoesSubsume)
-				otherDescriptor.MarkSubsumedAndFree();
+				otherDescriptor.MarkSubsumed();
 		}
 	}
 }
