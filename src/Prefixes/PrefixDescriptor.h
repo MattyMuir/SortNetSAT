@@ -37,7 +37,7 @@ public:
 
 	void ComputeSignature(const std::vector<uint64_t>& outputs);
 	void MarkSubsumed();
-	void ForceReset();
+	void ResetUnatomic();
 
 	bool IsSubsumed() const;
 	std::optional<Guard> AcquireGuard();

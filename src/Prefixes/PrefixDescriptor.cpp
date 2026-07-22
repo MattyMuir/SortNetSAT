@@ -75,7 +75,7 @@ void PrefixDescriptor::MarkSubsumed()
 	// else: whichever Guard destructor brings the refcount to zero will free it
 }
 
-void PrefixDescriptor::ForceReset()
+void PrefixDescriptor::ResetUnatomic()
 {
 	signature.Free();
 	state = Empty;

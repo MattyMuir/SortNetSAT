@@ -20,7 +20,7 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 	{
 		// Generation
 		CachePreviousOutputs();
-		Generate(prevD == 0);
+		GenerateMulti(prevD == 0);
 
 		// Pruning
 		PruneMulti(100);
@@ -44,11 +44,40 @@ void PrefixGeneratorV4::CachePreviousOutputs()
 		prevOutputs.push_back(FactoredOutputSet{ prevPrefix, n });
 }
 
-FactoredOutputSet PrefixGeneratorV4::GetOutputs(size_t prevIdx, size_t layerIdx)
+FactoredOutputSet PrefixGeneratorV4::GetOutputs(size_t prevIdx, size_t layerIdx) const
 {
 	FactoredOutputSet outputs{ prevOutputs[prevIdx] };
 	outputs.ApplyCEs(allLayers[layerIdx]);
 	return outputs;
+}
+
+void PrefixGeneratorV4::GenerateWorker(bool isFirst)
+{
+	std::vector<PrefixDescriptor> prefixes;
+	std::vector<size_t> numOutputs;
+	for (;;)
+	{
+		// Get a last-layer to generate new prefixes for
+		size_t layerIdx = globalLayerIdx.fetch_add(1, std::memory_order_relaxed);
+		if (layerIdx >= allLayers.size()) break;
+
+		// Skip un-full layers for depth-1 prefixes
+		if (isFirst && allLayers[layerIdx].size() != n / 2) continue;
+
+		// Generate all non-redundant prefixes ending with this last-layer
+		for (size_t prevIdx = 0; prevIdx < prevPrefixes.size(); prevIdx++)
+		{
+			FactoredOutputSet outputs = GetOutputs(prevIdx, layerIdx);
+			if (outputs.IsRedundant()) continue;
+			prefixes.emplace_back(prevIdx, layerIdx, n);
+			numOutputs.push_back(outputs.Size());
+		}
+	}
+
+	// Add results to global variables (serializing threads here is a minor overhead)
+	std::lock_guard lock{ appendMutex };
+	globalPrefixes.insert(globalPrefixes.end(), std::make_move_iterator(prefixes.begin()), std::make_move_iterator(prefixes.end()));
+	globalNumOutputs.insert(globalNumOutputs.end(), numOutputs.begin(), numOutputs.end());
 }
 
 template <typename Ty, typename Proj>
@@ -88,26 +117,36 @@ static inline void SortProjected(std::vector<Ty>& arr, const std::vector<Proj>& 
 	}
 }
 
-void PrefixGeneratorV4::Generate(bool isFirst)
+void PrefixGeneratorV4::GenerateMulti(bool isFirst)
 {
+	// Reset global state
 	globalPrefixes.clear();
+	globalNumOutputs.clear();
+	globalLayerIdx = 0;
 
-	std::vector<size_t> numOutputs;
-	for (size_t layerIdx = 0; layerIdx < allLayers.size(); layerIdx++)
+	// Launch worker threads
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<std::thread> threads;
+	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
+		threads.emplace_back([this, isFirst]() { GenerateWorker(isFirst); });
+
+	// Logging
+	for (;;)
 	{
-		// Skip un-full layers for depth-1 prefixes
-		if (isFirst && allLayers[layerIdx].size() != n / 2) continue;
-
-		for (size_t prevIdx = 0; prevIdx < prevPrefixes.size(); prevIdx++)
-		{
-			FactoredOutputSet outputs = GetOutputs(prevIdx, layerIdx);
-			if (outputs.IsRedundant()) continue;
-			globalPrefixes.emplace_back(prevIdx, layerIdx, n);
-			numOutputs.push_back(outputs.Size());
-		}
+		size_t progress = globalLayerIdx;
+		if (progress >= allLayers.size()) break;
+		std::print("Generating {:>7.3f}%\r", (double)progress / allLayers.size() * 100.0);
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 20 });
 	}
+	std::println("Generating 100.000%");
 
-	SortProjected(globalPrefixes, numOutputs, true);
+	// Join worker threads
+	for (std::thread& thread : threads)
+		thread.join();
+
+	// Sort prefixes in descending order of num outputs
+	SortProjected(globalPrefixes, globalNumOutputs, true);
+	globalNumOutputs.clear();
 }
 
 void PrefixGeneratorV4::SanitizeGlobalPrefixes()
@@ -119,7 +158,7 @@ void PrefixGeneratorV4::SanitizeGlobalPrefixes()
 
 	// Reset all descriptors
 	for (PrefixDescriptor& descriptor : globalPrefixes)
-		descriptor.ForceReset();
+		descriptor.ResetUnatomic();
 }
 
 void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
@@ -206,9 +245,10 @@ void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 	{
 		size_t progress = globalPrefixIdx;
 		if (progress >= globalPrefixes.size()) break;
-		std::print("{:>7.3f}%\r", (double)progress / globalPrefixes.size() * 100.0);
+		std::print("Pruning {:>7.3f}%\r", (double)progress / globalPrefixes.size() * 100.0);
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 20 });
 	}
+	std::println("Pruning 100.000%");
 
 	// Join all worker threads
 	for (auto& thread : threads) thread.join();

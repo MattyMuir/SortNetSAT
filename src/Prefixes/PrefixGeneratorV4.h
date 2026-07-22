@@ -1,6 +1,7 @@
 #pragma once
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 #include <sortnetutils.h>
 
@@ -26,13 +27,19 @@ protected:
 	std::vector<Network> prevPrefixes;
 	std::vector<FactoredOutputSet> prevOutputs;
 
-	// Pruning state
+	// Generating state
 	std::vector<PrefixDescriptor> globalPrefixes;
+	std::vector<size_t> globalNumOutputs;
+	std::mutex appendMutex;
+	std::atomic<size_t> globalLayerIdx;
+
+	// Pruning state
 	std::atomic<size_t> globalPrefixIdx;
 
 	void CachePreviousOutputs();
-	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx);
-	void Generate(bool isFirst);
+	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx) const;
+	void GenerateWorker(bool isFirst);
+	void GenerateMulti(bool isFirst);
 
 	// Multi-threaded prune
 	void SanitizeGlobalPrefixes();
