@@ -22,15 +22,9 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 		CachePreviousOutputs();
 		Generate(prevD == 0);
 
-		// Pruning phase 1
-		ForwardPruneMulti(100);
-		std::reverse(globalPrefixes.begin(), globalPrefixes.end());
-		ForwardPruneMulti(100);
-
-		// Pruning phase 2
-		ForwardPruneMulti();
-		std::reverse(globalPrefixes.begin(), globalPrefixes.end());
-		ForwardPruneMulti();
+		// Pruning
+		PruneMulti(100);
+		PruneMulti();
 
 		// Update prevPrefixes
 		prevPrefixes = GetAllPrefixes();
@@ -113,7 +107,19 @@ void PrefixGeneratorV4::Generate(bool isFirst)
 		}
 	}
 
-	SortProjected(globalPrefixes, numOutputs, false);
+	SortProjected(globalPrefixes, numOutputs, true);
+}
+
+void PrefixGeneratorV4::SanitizeGlobalPrefixes()
+{
+	// Erase subsumed prefixes from globalPrefixes
+	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
+		return descriptor.IsSubsumed();
+		});
+
+	// Reset all descriptors
+	for (PrefixDescriptor& descriptor : globalPrefixes)
+		descriptor.ForceReset();
 }
 
 void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
@@ -131,6 +137,36 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 		descriptor.ComputeSignature(outputs);
 		auto guard = descriptor.AcquireGuard();
 		if (!guard) continue;
+
+		// Check if subsumed in the range [0, prefixIdx)
+		bool subsumed = false;
+		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)
+		{
+			PrefixDescriptor& otherDescriptor = globalPrefixes[prefixIdx - 1 - otherPrefixIdx];
+
+			// Acquire a guard to access the signature
+			auto otherGuard = otherDescriptor.AcquireGuard();
+			if (!otherGuard) continue;
+
+			// Compare signatures and release guard
+			bool signaturePrecheck = (otherGuard->Signature() > guard->Signature());
+			otherGuard.reset();
+			if (signaturePrecheck) continue;
+
+			// Run a full backtracking subsumption test
+			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
+			if (solver.Solve(otherOutputs, outputs) == DoesSubsume)
+			{
+				subsumed = true;
+				break;
+			}
+		}
+
+		if (subsumed)
+		{
+			descriptor.MarkSubsumed();
+			continue;
+		}
 
 		// Check for subsumption in the range [0, prefixIdx)
 		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)
@@ -154,19 +190,7 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 	}
 }
 
-void PrefixGeneratorV4::SanitizeGlobalPrefixes()
-{
-	// Erase subsumed prefixes from globalPrefixes
-	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
-		return descriptor.IsSubsumed();
-		});
-
-	// Reset all descriptors
-	for (PrefixDescriptor& descriptor : globalPrefixes)
-		descriptor.ForceReset();
-}
-
-void PrefixGeneratorV4::ForwardPruneMulti(size_t maxSearches)
+void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 {
 	// Initialize global state
 	globalPrefixIdx = 0;

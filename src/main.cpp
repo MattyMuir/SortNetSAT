@@ -128,7 +128,7 @@ void EquivTest();
 
 int main()
 {
-	PrefixGeneratorV4 generator{ 14, 3, true };
+	PrefixGeneratorV4 generator{ 16, 3, true };
 	TIMER(t);
 	generator.GeneratePrefixes();
 	STOP_LOG(t);
