@@ -15,7 +15,9 @@ void PrefixGeneratorV4::LoadPrevious(uint8_t prevD_, const std::vector<Network>&
 
 std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 {
-	prevPrefixes.emplace_back(Network{});
+	if (!prevD)
+		prevPrefixes = { Network{} };
+
 	while (prevD < d)
 	{
 		// Generation
@@ -138,11 +140,12 @@ void PrefixGeneratorV4::GenerateMulti(bool isFirst)
 		std::print("Generating {:>7.3f}%\r", (double)progress / allLayers.size() * 100.0);
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 20 });
 	}
-	std::println("Generating 100.000%");
 
 	// Join worker threads
 	for (std::thread& thread : threads)
 		thread.join();
+
+	std::println("Generated {} prefixes", globalPrefixes.size());
 
 	// Sort prefixes in descending order of num outputs
 	SortProjected(globalPrefixes, globalNumOutputs, true);

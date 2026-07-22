@@ -131,6 +131,7 @@ int main()
 	PrefixGeneratorV4 generator{ 14, 3, true };
 	//generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_2_sym.txt"));
 	TIMER(t);
-	generator.GeneratePrefixes();
+	auto allPrefixes = generator.GeneratePrefixes();
 	STOP_LOG(t);
+	//SavePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt", allPrefixes);
 }
