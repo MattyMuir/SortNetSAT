@@ -51,12 +51,13 @@ void NetworkSignature::Free()
 	data.reset();
 }
 
+size_t NetworkSignature::GetNumOutputs() const
+{
+	return Get(NumOutputs)[0];
+}
+
 bool NetworkSignature::operator>(const NetworkSignature& other) const
 {
-	// === T1 Signature ===
-	if (Get(NumOutputs)[0] > other.Get(NumOutputs)[0])
-		return true;
-
 	// === T3 Signature ===
 	for (uint8_t popcount = 0; popcount <= n; popcount++)
 	{

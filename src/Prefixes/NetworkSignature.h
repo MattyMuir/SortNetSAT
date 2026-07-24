@@ -24,6 +24,7 @@ public:
 
 	void Construct(const std::vector<uint64_t>& outputs);
 	void Free();
+	size_t GetNumOutputs() const;
 
 	bool operator>(const NetworkSignature& other) const;
 

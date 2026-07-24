@@ -191,12 +191,15 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 			if (!otherGuard) continue;
 
 			// Compare signatures and release guard
+			if (otherGuard->Signature().GetNumOutputs() > guard->Signature().GetNumOutputs())
+				break;
 			bool signaturePrecheck = (otherGuard->Signature() > guard->Signature());
 			otherGuard.reset();
 			if (signaturePrecheck) continue;
 
 			// Run a full backtracking subsumption test
 			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
+			if (symmetric) std::erase_if(otherOutputs, [this](uint64_t x) { return HasSmallerMirror(n, x); });
 			if (solver.Solve(otherOutputs, outputs) == DoesSubsume)
 			{
 				subsumed = true;
@@ -209,6 +212,10 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 			descriptor.MarkSubsumed();
 			continue;
 		}
+
+		// Now that outputs is on the LHS of the subsumption tests, strip mirrors
+		if (symmetric)
+			std::erase_if(outputs, [this](uint64_t x) { return HasSmallerMirror(n, x); });
 
 		// Check for subsumption in the range [0, prefixIdx)
 		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)

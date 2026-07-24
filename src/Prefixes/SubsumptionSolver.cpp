@@ -129,7 +129,6 @@ void SubsumptionSolver::FilterDomains(std::vector<uint64_t>& domains, uint64_t a
 		// Clears the domain mask where the bits differ
 		uint64_t equalMask = ~(srcBitmask ^ bx);
 		domains[src] &= equalMask;
-		if (symmetric) domains[n - 1 - src] &= ReverseBits(equalMask);
 	}
 }
 
@@ -169,6 +168,11 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
 		if (patternCount == 1)
 			FilterDomains(domains, ax, patternSources[bitCount][pattern]);
 	}
+
+	// Exploit symmetry in domains
+	if (symmetric)
+		for (uint8_t dst = 0; dst < n; dst++)
+			domains[dst] &= ReverseBits(domains[n - 1 - dst]);
 
 	// Reset the LUTs
 	for (uint64_t bx : *b)
