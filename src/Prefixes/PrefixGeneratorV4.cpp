@@ -172,7 +172,7 @@ void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 	for (;;)
 	{
 		// Get the next prefix from globalPrefixes
-		size_t prefixIdx = globalPrefixIdx++;
+		size_t prefixIdx = globalPrefixIdx.fetch_add(1, std::memory_order_relaxed);
 		if (prefixIdx >= globalPrefixes.size()) break;
 		PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
 
@@ -269,6 +269,10 @@ void PrefixGeneratorV4::CleanupWorker()
 		// Free signatures
 		for (size_t prefixIdx : freeList)
 			globalPrefixes[prefixIdx].FreeSignature();
+
+		// Log progress
+		size_t progress = globalPrefixIdx.load(std::memory_order_relaxed);
+		std::print("Pruning {:>7.3f}%\r", (double)progress / globalPrefixes.size() * 100.0);
 	}
 }
 
@@ -287,19 +291,10 @@ void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 	// Launch cleanup thread
 	std::thread cleanupThread{ [this]() { CleanupWorker(); } };
 
-	// Logging
-	for (;;)
-	{
-		size_t progress = globalPrefixIdx;
-		if (progress >= globalPrefixes.size()) break;
-		std::print("Pruning {:>7.3f}%\r", (double)progress / globalPrefixes.size() * 100.0);
-		std::this_thread::sleep_for(std::chrono::milliseconds{ 20 });
-	}
-	std::println("Pruning 100.000%");
-
 	// Join all threads
 	for (auto& thread : threads) thread.join();
 	cleanupThread.join();
+	std::println("Pruning 100.000%");
 
 	SanitizeGlobalPrefixes();
 }
