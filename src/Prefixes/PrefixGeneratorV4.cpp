@@ -156,7 +156,7 @@ void PrefixGeneratorV4::SanitizeGlobalPrefixes()
 {
 	// Erase subsumed prefixes from globalPrefixes
 	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
-		return descriptor.IsSubsumed();
+		return descriptor.isSubsumed;
 		});
 
 	// Reset all descriptors
@@ -164,38 +164,38 @@ void PrefixGeneratorV4::SanitizeGlobalPrefixes()
 		descriptor.ResetUnatomic();
 }
 
-void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
+void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 {
 	SubsumptionSolver solver{ n, symmetric, maxSearches };
+	uint64_t threadCounter = 0;
+
 	for (;;)
 	{
 		// Get the next prefix from globalPrefixes
 		size_t prefixIdx = globalPrefixIdx++;
-		if (prefixIdx >= globalPrefixes.size()) return;
+		if (prefixIdx >= globalPrefixes.size()) break;
 		PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
 
 		// Compute signature
 		std::vector<uint64_t> outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
 		descriptor.ComputeSignature(outputs);
-		auto guard = descriptor.AcquireGuard();
-		if (!guard) continue;
 
 		// Check if subsumed in the range [0, prefixIdx)
 		bool subsumed = false;
 		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)
 		{
+			// Check if either descriptor is subsumed
 			PrefixDescriptor& otherDescriptor = globalPrefixes[prefixIdx - 1 - otherPrefixIdx];
+			if (descriptor.isSubsumed) break;
+			if (otherDescriptor.isSubsumed) continue;
 
-			// Acquire a guard to access the signature
-			auto otherGuard = otherDescriptor.AcquireGuard();
-			if (!otherGuard) continue;
+			// Compare signatures
+			otherDescriptor.WaitForSignature();
+			if (descriptor.signature.GetNumOutputs() > otherDescriptor.signature.GetNumOutputs()) break;
+			if (otherDescriptor.signature > descriptor.signature) continue;
 
-			// Compare signatures and release guard
-			if (otherGuard->Signature().GetNumOutputs() > guard->Signature().GetNumOutputs())
-				break;
-			bool signaturePrecheck = (otherGuard->Signature() > guard->Signature());
-			otherGuard.reset();
-			if (signaturePrecheck) continue;
+			// Increment thread counter
+			threadCounters[workerIdx].value.store(++threadCounter, std::memory_order_release);
 
 			// Run a full backtracking subsumption test
 			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
@@ -220,16 +220,17 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 		// Check for subsumption in the range [0, prefixIdx)
 		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)
 		{
+			// Check if either descriptor is subsumed
 			PrefixDescriptor& otherDescriptor = globalPrefixes[otherPrefixIdx];
+			if (descriptor.isSubsumed) break;
+			if (otherDescriptor.isSubsumed) continue;
 
-			// Acquire a guard to access the signature
-			auto otherGuard = otherDescriptor.AcquireGuard();
-			if (!otherGuard) continue;
+			// Compare signatures
+			otherDescriptor.WaitForSignature();
+			if (descriptor.signature > otherDescriptor.signature) continue;
 
-			// Compare signatures and release guard
-			bool signaturePrecheck = (guard->Signature() > otherGuard->Signature());
-			otherGuard.reset();
-			if (signaturePrecheck) continue;
+			// Increment thread counter
+			threadCounters[workerIdx].value.store(++threadCounter, std::memory_order_release);
 
 			// Run a full backtracking subsumption test
 			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
@@ -237,18 +238,54 @@ void PrefixGeneratorV4::PruneWorker(size_t maxSearches)
 				otherDescriptor.MarkSubsumed();
 		}
 	}
+
+	threadCounters[workerIdx].value.store(UINT64_MAX, std::memory_order_release);
+}
+
+void PrefixGeneratorV4::CleanupWorker()
+{
+	for (;;)
+	{
+		if (globalPrefixIdx.load(std::memory_order_relaxed) >= globalPrefixes.size())
+			break;
+
+		// Get a list of all prefixes that need freeing
+		std::vector<size_t> freeList;
+		for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
+			if (globalPrefixes[prefixIdx].isSubsumed && !globalPrefixes[prefixIdx].IsFreed())
+				freeList.push_back(prefixIdx);
+
+		// Take a snapshot of all thread counters
+		std::vector<size_t> snapshots;
+		for (size_t workerIdx = 0; workerIdx < threadCounters.size(); workerIdx++)
+			snapshots.push_back(threadCounters[workerIdx].value.load(std::memory_order_acquire));
+
+		// Wait until all snapshots have increased
+		for (size_t workerIdx = 0; workerIdx < threadCounters.size(); workerIdx++)
+			if (snapshots[workerIdx] != UINT64_MAX)
+				while (threadCounters[workerIdx].value.load(std::memory_order_acquire) <= snapshots[workerIdx])
+					std::this_thread::yield();
+
+		// Free signatures
+		for (size_t prefixIdx : freeList)
+			globalPrefixes[prefixIdx].FreeSignature();
+	}
 }
 
 void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 {
 	// Initialize global state
 	globalPrefixIdx = 0;
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	threadCounters = std::vector<ThreadCounter>(numThreads);
 
 	// Launch worker threads
-	size_t numThreads = std::thread::hardware_concurrency() - 1;
 	std::vector<std::thread> threads;
 	for (size_t i = 0; i < numThreads; i++)
-		threads.emplace_back([this, maxSearches]() { PruneWorker(maxSearches); });
+		threads.emplace_back([this, i, maxSearches]() { PruneWorker(i, maxSearches); });
+
+	// Launch cleanup thread
+	std::thread cleanupThread{ [this]() { CleanupWorker(); } };
 
 	// Logging
 	for (;;)
@@ -260,8 +297,9 @@ void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 	}
 	std::println("Pruning 100.000%");
 
-	// Join all worker threads
+	// Join all threads
 	for (auto& thread : threads) thread.join();
+	cleanupThread.join();
 
 	SanitizeGlobalPrefixes();
 }

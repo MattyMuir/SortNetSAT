@@ -35,6 +35,8 @@ protected:
 
 	// Pruning state
 	std::atomic<size_t> globalPrefixIdx;
+	struct alignas(64) ThreadCounter { std::atomic<uint64_t> value{ 0 }; };
+	std::vector<ThreadCounter> threadCounters;
 
 	void CachePreviousOutputs();
 	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx) const;
@@ -43,8 +45,8 @@ protected:
 
 	// Multi-threaded prune
 	void SanitizeGlobalPrefixes();
-	bool Subsumes(const PrefixDescriptor::Guard& guard, size_t otherPrefixIdx);
-	void PruneWorker(size_t maxSearches);
+	void PruneWorker(size_t workerIdx, size_t maxSearches);
+	void CleanupWorker();
 	void PruneMulti(size_t maxSearches = 0);
 
 	std::vector<Network> GetAllPrefixes();

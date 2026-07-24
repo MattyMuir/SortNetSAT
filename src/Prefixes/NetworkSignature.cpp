@@ -51,6 +51,11 @@ void NetworkSignature::Free()
 	data.reset();
 }
 
+bool NetworkSignature::IsFreed() const
+{
+	return !data;
+}
+
 size_t NetworkSignature::GetNumOutputs() const
 {
 	return Get(NumOutputs)[0];
