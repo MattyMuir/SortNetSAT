@@ -25,7 +25,10 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 		GenerateMulti(prevD == 0);
 
 		// Pruning
+		OutputPruneMulti();
+		std::println("Pruned to {}", globalPrefixes.size());
 		PruneMulti(100);
+		std::println("Pruned to {}", globalPrefixes.size());
 		PruneMulti();
 
 		// Update prevPrefixes
@@ -150,6 +153,65 @@ void PrefixGeneratorV4::GenerateMulti(bool isFirst)
 	// Sort prefixes in descending order of num outputs
 	SortProjected(globalPrefixes, globalNumOutputs, true);
 	globalNumOutputs.clear();
+}
+
+void PrefixGeneratorV4::OutputPruneWorker()
+{
+	for (;;)
+	{
+		// Get the next prefix from globalPrefixes
+		size_t prefixIdx = globalPrefixIdx.fetch_add(1, std::memory_order_relaxed);
+		if (prefixIdx >= globalPrefixes.size()) break;
+		PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
+		FactoredOutputSet factoredOutputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx);
+		OutputSet outputs{ factoredOutputs };
+
+		// Get layer mask
+		Network layer = allLayers[descriptor.layerIdx];
+		uint64_t layerMask = 0;
+		for (auto [i, j] : layer)
+			layerMask |= (1ULL << i) | (1ULL << j);
+
+		// Iterate over all CEs to add
+		for (uint8_t i = 0; i + 1 < n; i++)
+		{
+			for (uint8_t j = i + 1; j < n; j++)
+			{
+				if (symmetric && i > n - 1 - j) continue;
+				if (layerMask & ((1ULL << i) | (1ULL << j))) continue;
+
+				Network newCEs{ CE{ i, j } };
+				if (symmetric)
+					newCEs.emplace_back(n - 1 - j, n - 1 - i);
+				FactoredOutputSet childOutputs{ factoredOutputs };
+				childOutputs.ApplyCEs(newCEs);
+				if (OutputSet::StrictSubset(OutputSet{ childOutputs }, outputs))
+				{
+					descriptor.isSubsumed = true;
+					goto next_prefix;
+				}
+			}
+		}
+
+next_prefix:
+	}
+}
+
+void PrefixGeneratorV4::OutputPruneMulti()
+{
+	// Initialize global state
+	globalPrefixIdx = 0;
+
+	// Launch worker threads
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < numThreads; i++)
+		threads.emplace_back([this]() { OutputPruneWorker(); });
+
+	// Join all threads
+	for (auto& thread : threads) thread.join();
+
+	SanitizeGlobalPrefixes();
 }
 
 void PrefixGeneratorV4::SanitizeGlobalPrefixes()

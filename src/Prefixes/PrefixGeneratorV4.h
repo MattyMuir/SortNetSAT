@@ -43,6 +43,9 @@ protected:
 	void GenerateWorker(bool isFirst);
 	void GenerateMulti(bool isFirst);
 
+	void OutputPruneWorker();
+	void OutputPruneMulti();
+
 	// Multi-threaded prune
 	void SanitizeGlobalPrefixes();
 	void PruneWorker(size_t workerIdx, size_t maxSearches);
