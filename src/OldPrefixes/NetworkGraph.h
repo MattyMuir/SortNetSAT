@@ -15,3 +15,8 @@ public:
 protected:
 	std::unique_ptr<bliss::Digraph> graph;
 };
+
+struct NetworkGraphHasher
+{
+	size_t operator()(const NetworkGraph& graph) const;
+};

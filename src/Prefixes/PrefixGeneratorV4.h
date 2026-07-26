@@ -34,7 +34,7 @@ protected:
 	std::atomic<size_t> globalLayerIdx;
 
 	// Pruning state
-	std::atomic<size_t> globalPrefixIdx;
+	std::atomic<size_t> globalPrevIdx, globalPrefixIdx;
 	struct alignas(64) ThreadCounter { std::atomic<uint64_t> value{ 0 }; };
 	std::vector<ThreadCounter> threadCounters;
 
@@ -45,6 +45,11 @@ protected:
 
 	void OutputPruneWorker();
 	void OutputPruneMulti();
+
+	void EquivalencePruneWorker();
+	void EquivalencePruneMulti();
+
+	void CacheSignaturesMulti();
 
 	// Multi-threaded prune
 	void SanitizeGlobalPrefixes();

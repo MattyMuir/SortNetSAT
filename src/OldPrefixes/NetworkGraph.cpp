@@ -97,3 +97,8 @@ uint32_t NetworkGraph::GetHash() const
 {
 	return graph->get_hash();
 }
+
+size_t NetworkGraphHasher::operator()(const NetworkGraph& graph) const
+{
+	return graph.GetHash();
+}

@@ -3,6 +3,9 @@
 #include <print>
 #include <random>
 #include <numeric>
+#include <unordered_set>
+
+#include "../OldPrefixes/NetworkGraph.h"
 
 PrefixGeneratorV4::PrefixGeneratorV4(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_), allLayers(GetAllLayers(n, symmetric)) {}
@@ -26,6 +29,8 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 
 		// Pruning
 		OutputPruneMulti();
+		std::println("Pruned to {}", globalPrefixes.size());
+		EquivalencePruneMulti();
 		std::println("Pruned to {}", globalPrefixes.size());
 		PruneMulti(100);
 		std::println("Pruned to {}", globalPrefixes.size());
@@ -163,6 +168,9 @@ void PrefixGeneratorV4::OutputPruneWorker()
 		size_t prefixIdx = globalPrefixIdx.fetch_add(1, std::memory_order_relaxed);
 		if (prefixIdx >= globalPrefixes.size()) break;
 		PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
+		if (allLayers[descriptor.layerIdx].size() == n / 2) continue;
+
+		// Compute outputs
 		FactoredOutputSet factoredOutputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx);
 		OutputSet outputs{ factoredOutputs };
 
@@ -180,19 +188,19 @@ void PrefixGeneratorV4::OutputPruneWorker()
 				if (symmetric && i > n - 1 - j) continue;
 				if (layerMask & ((1ULL << i) | (1ULL << j))) continue;
 
+				// Compute child outputs
 				Network newCEs{ CE{ i, j } };
-				if (symmetric)
-					newCEs.emplace_back(n - 1 - j, n - 1 - i);
+				if (symmetric) newCEs.emplace_back(n - 1 - j, n - 1 - i);
 				FactoredOutputSet childOutputs{ factoredOutputs };
 				childOutputs.ApplyCEs(newCEs);
-				if (OutputSet::StrictSubset(OutputSet{ childOutputs }, outputs))
+
+				if (OutputSet::StrictSubset(OutputSet{ std::move(childOutputs) }, outputs))
 				{
 					descriptor.isSubsumed = true;
 					goto next_prefix;
 				}
 			}
 		}
-
 next_prefix:
 	}
 }
@@ -212,6 +220,73 @@ void PrefixGeneratorV4::OutputPruneMulti()
 	for (auto& thread : threads) thread.join();
 
 	SanitizeGlobalPrefixes();
+}
+
+void PrefixGeneratorV4::EquivalencePruneWorker()
+{
+	for (;;)
+	{
+		// Get a previous index to work on
+		size_t prevIdx = globalPrevIdx.fetch_add(1, std::memory_order_relaxed);
+		if (prevIdx >= prevPrefixes.size()) return;
+
+		std::unordered_set<NetworkGraph, NetworkGraphHasher> graphs;
+		for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
+		{
+			PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
+			if (descriptor.prevIdx != prevIdx) continue;
+
+			LayeredNetwork network{ prevPrefixes[prevIdx] + allLayers[descriptor.layerIdx] };
+			NetworkGraph graph{ network, n, symmetric };
+
+			auto [_, inserted] = graphs.emplace(std::move(graph));
+			if (!inserted) descriptor.isSubsumed = true;
+		}
+	}
+}
+
+void PrefixGeneratorV4::EquivalencePruneMulti()
+{
+	// Reset global state
+	globalPrefixIdx = 0;
+
+	// Launch worker threads
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < numThreads; i++)
+		threads.emplace_back([this]() { EquivalencePruneWorker(); });
+
+	// Join all threads
+	for (auto& thread : threads) thread.join();
+
+	SanitizeGlobalPrefixes();
+}
+
+void PrefixGeneratorV4::CacheSignaturesMulti()
+{
+	globalPrefixIdx = 0;
+
+	// Launch worker threads
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < numThreads; i++)
+	{
+		threads.emplace_back([this]()
+			{
+				for (;;)
+				{
+					size_t prefixIdx = globalPrefixIdx.fetch_add(1, std::memory_order_relaxed);
+					if (prefixIdx >= globalPrefixes.size()) return;
+
+					PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
+					std::vector outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
+					descriptor.ComputeSignature(outputs);
+				}
+			});
+	}
+	
+	// Join all threads
+	for (auto& thread : threads) thread.join();
 }
 
 void PrefixGeneratorV4::SanitizeGlobalPrefixes()
@@ -240,7 +315,7 @@ void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 
 		// Compute signature
 		std::vector<uint64_t> outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
-		descriptor.ComputeSignature(outputs);
+		//descriptor.ComputeSignature(outputs);
 
 		// Check if subsumed in the range [0, prefixIdx)
 		bool subsumed = false;
@@ -252,7 +327,7 @@ void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 			if (otherDescriptor.isSubsumed) continue;
 
 			// Compare signatures
-			otherDescriptor.WaitForSignature();
+			//otherDescriptor.WaitForSignature();
 			if (descriptor.signature.GetNumOutputs() > otherDescriptor.signature.GetNumOutputs()) break;
 			if (otherDescriptor.signature > descriptor.signature) continue;
 
@@ -340,6 +415,8 @@ void PrefixGeneratorV4::CleanupWorker()
 
 void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 {
+	CacheSignaturesMulti();
+
 	// Initialize global state
 	globalPrefixIdx = 0;
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
