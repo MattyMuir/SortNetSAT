@@ -7,7 +7,7 @@
 
 SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_)
 	: n(n_), symmetric(symmetric_), maxSearches(maxSearches_ ? maxSearches_ : UINT64_MAX),
-	initialDomains(n, (uint64_t)-1), perm(n, Unassigned), patternCounts(n + 1), patternSources(n + 1)
+	initialDomains(n, (uint64_t)-1), perm(n, Unassigned), fastperm(n), patternCounts(n + 1), patternSources(n + 1)
 {
 	// Initialize pattern LUTs
 	for (uint64_t bitCount = 0; bitCount <= n; bitCount++)
@@ -155,7 +155,7 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
 	for (uint64_t ax : *a)
 	{
 		uint64_t bitCount = std::popcount(ax);
-		uint64_t pattern = _pext_u64(perm(ax), dstMask);
+		uint64_t pattern = _pext_u64(fastperm(ax), dstMask);
 		uint8_t patternCount = patternCounts[bitCount][pattern];
 
 		if (!patternCount)
@@ -202,6 +202,7 @@ bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 
 		// Make the assignment
 		Assign(src, dst);
+		fastperm.Assign(perm);
 
 		// Check if the assignment is valid
 		std::vector<uint64_t> newDomains{ domains };

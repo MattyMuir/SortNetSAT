@@ -49,8 +49,6 @@ protected:
 	void EquivalencePruneWorker();
 	void EquivalencePruneMulti();
 
-	void CacheSignaturesMulti();
-
 	// Multi-threaded prune
 	void SanitizeGlobalPrefixes();
 	void PruneWorker(size_t workerIdx, size_t maxSearches);

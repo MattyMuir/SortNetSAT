@@ -216,6 +216,14 @@ void PrefixGeneratorV4::OutputPruneMulti()
 	for (size_t i = 0; i < numThreads; i++)
 		threads.emplace_back([this]() { OutputPruneWorker(); });
 
+	for (;;)
+	{
+		size_t progress = globalPrefixIdx.load(std::memory_order_relaxed);
+		if (progress >= globalPrefixes.size()) break;
+		std::print("Pruning {:>7.3f}%\r", (double)progress / globalPrefixes.size() * 100.0);
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
+	}
+
 	// Join all threads
 	for (auto& thread : threads) thread.join();
 
@@ -248,7 +256,7 @@ void PrefixGeneratorV4::EquivalencePruneWorker()
 void PrefixGeneratorV4::EquivalencePruneMulti()
 {
 	// Reset global state
-	globalPrefixIdx = 0;
+	globalPrevIdx = 0;
 
 	// Launch worker threads
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
@@ -256,37 +264,18 @@ void PrefixGeneratorV4::EquivalencePruneMulti()
 	for (size_t i = 0; i < numThreads; i++)
 		threads.emplace_back([this]() { EquivalencePruneWorker(); });
 
+	for (;;)
+	{
+		size_t progress = globalPrevIdx.load(std::memory_order_relaxed);
+		if (progress >= prevPrefixes.size()) break;
+		std::print("Pruning {:>7.3f}%\r", (double)progress / prevPrefixes.size() * 100.0);
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
+	}
+
 	// Join all threads
 	for (auto& thread : threads) thread.join();
 
 	SanitizeGlobalPrefixes();
-}
-
-void PrefixGeneratorV4::CacheSignaturesMulti()
-{
-	globalPrefixIdx = 0;
-
-	// Launch worker threads
-	size_t numThreads = std::thread::hardware_concurrency() - 1;
-	std::vector<std::thread> threads;
-	for (size_t i = 0; i < numThreads; i++)
-	{
-		threads.emplace_back([this]()
-			{
-				for (;;)
-				{
-					size_t prefixIdx = globalPrefixIdx.fetch_add(1, std::memory_order_relaxed);
-					if (prefixIdx >= globalPrefixes.size()) return;
-
-					PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
-					std::vector outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
-					descriptor.ComputeSignature(outputs);
-				}
-			});
-	}
-	
-	// Join all threads
-	for (auto& thread : threads) thread.join();
 }
 
 void PrefixGeneratorV4::SanitizeGlobalPrefixes()
@@ -315,7 +304,7 @@ void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 
 		// Compute signature
 		std::vector<uint64_t> outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
-		//descriptor.ComputeSignature(outputs);
+		descriptor.ComputeSignature(outputs);
 
 		// Check if subsumed in the range [0, prefixIdx)
 		bool subsumed = false;
@@ -327,7 +316,7 @@ void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 			if (otherDescriptor.isSubsumed) continue;
 
 			// Compare signatures
-			//otherDescriptor.WaitForSignature();
+			otherDescriptor.WaitForSignature();
 			if (descriptor.signature.GetNumOutputs() > otherDescriptor.signature.GetNumOutputs()) break;
 			if (otherDescriptor.signature > descriptor.signature) continue;
 
@@ -415,8 +404,6 @@ void PrefixGeneratorV4::CleanupWorker()
 
 void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 {
-	CacheSignaturesMulti();
-
 	// Initialize global state
 	globalPrefixIdx = 0;
 	size_t numThreads = std::thread::hardware_concurrency() - 1;

@@ -128,7 +128,17 @@ void EquivTest();
 
 int main()
 {
-	PrefixGeneratorV4 generator{ 16, 3, true };
+#if 0
+	PrefixGeneratorV4 generator{ 18, 3, true };
+	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_2_sym.txt"));
+	TIMER(t);
+	auto allPrefixes = generator.GeneratePrefixes();
+	STOP_LOG(t);
+	SavePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt", allPrefixes);
+#endif
+
+	PrefixGeneratorV4 generator{ 14, 3, true };
+	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\14_2_sym.txt"));
 	TIMER(t);
 	auto allPrefixes = generator.GeneratePrefixes();
 	STOP_LOG(t);

@@ -33,6 +33,7 @@ protected:
 	std::vector<uint64_t> initialDomains;
 	// Working permutation using the 'gather' convention
 	Permutation perm;
+	FastPermutation fastperm;
 	// Counts the number of each pattern, in unary (to avoid overflow)
 	std::vector<std::vector<uint8_t>> patternCounts;
 	// Stores a representative element in b for each pattern
