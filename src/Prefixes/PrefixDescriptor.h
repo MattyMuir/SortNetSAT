@@ -10,11 +10,12 @@ protected:
 
 public:
 	size_t prevIdx, layerIdx;
+	size_t numOutputs;
 	NetworkSignature signature;
 	std::atomic<bool> isEmpty;
 	bool isSubsumed;
 
-	PrefixDescriptor(size_t prevIdx_, size_t layerIdx_, uint8_t n);
+	PrefixDescriptor(size_t prevIdx_, size_t layerIdx_, size_t numOutputs_, uint8_t n);
 	PrefixDescriptor(PrefixDescriptor&& other) noexcept;
 	PrefixDescriptor& operator=(PrefixDescriptor&& other) noexcept;
 

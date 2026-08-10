@@ -4,8 +4,9 @@
 #include <random>
 #include <numeric>
 #include <unordered_set>
+#include <algorithm>
 
-#include "../OldPrefixes/NetworkGraph.h"
+#include "IsomorphicOutputSetV2.h"
 
 PrefixGeneratorV4::PrefixGeneratorV4(uint8_t n_, uint8_t d_, bool symmetric_)
 	: n(n_), d(d_), symmetric(symmetric_), allLayers(GetAllLayers(n, symmetric)) {}
@@ -29,11 +30,11 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 
 		// Pruning
 		OutputPruneMulti();
-		std::println("Pruned to {}", globalPrefixes.size());
-		EquivalencePruneMulti();
-		std::println("Pruned to {}", globalPrefixes.size());
+		std::println("Pruned to {}    ", globalPrefixes.size());
+		OutputEquivPruneMulti();
+		std::println("Pruned to {}    ", globalPrefixes.size());
 		PruneMulti(100);
-		std::println("Pruned to {}", globalPrefixes.size());
+		std::println("Pruned to {}    ", globalPrefixes.size());
 		PruneMulti();
 
 		// Update prevPrefixes
@@ -54,17 +55,9 @@ void PrefixGeneratorV4::CachePreviousOutputs()
 		prevOutputs.push_back(FactoredOutputSet{ prevPrefix, n });
 }
 
-FactoredOutputSet PrefixGeneratorV4::GetOutputs(size_t prevIdx, size_t layerIdx) const
-{
-	FactoredOutputSet outputs{ prevOutputs[prevIdx] };
-	outputs.ApplyCEs(allLayers[layerIdx]);
-	return outputs;
-}
-
 void PrefixGeneratorV4::GenerateWorker(bool isFirst)
 {
 	std::vector<PrefixDescriptor> prefixes;
-	std::vector<size_t> numOutputs;
 	for (;;)
 	{
 		// Get a last-layer to generate new prefixes for
@@ -79,59 +72,19 @@ void PrefixGeneratorV4::GenerateWorker(bool isFirst)
 		{
 			FactoredOutputSet outputs = GetOutputs(prevIdx, layerIdx);
 			if (outputs.IsRedundant()) continue;
-			prefixes.emplace_back(prevIdx, layerIdx, n);
-			numOutputs.push_back(outputs.Size());
+			prefixes.emplace_back(prevIdx, layerIdx, outputs.Size(), n);
 		}
 	}
 
 	// Add results to global variables (serializing threads here is a minor overhead)
 	std::lock_guard lock{ appendMutex };
 	globalPrefixes.insert(globalPrefixes.end(), std::make_move_iterator(prefixes.begin()), std::make_move_iterator(prefixes.end()));
-	globalNumOutputs.insert(globalNumOutputs.end(), numOutputs.begin(), numOutputs.end());
-}
-
-template <typename Ty, typename Proj>
-static inline void SortProjected(std::vector<Ty>& arr, const std::vector<Proj>& proj, bool reverse = false)
-{
-	// Initialize index array
-	size_t n = arr.size();
-	std::vector<std::size_t> idxs(n);
-	std::iota(idxs.begin(), idxs.end(), std::size_t{ 0 });
-
-	// Sort index array
-	std::sort(idxs.begin(), idxs.end(), [&proj, reverse](size_t idx0, size_t idx1) {
-		return reverse ? (proj[idx0] > proj[idx1]) : (proj[idx0] < proj[idx1]);
-		});
-
-	// Apply the permutation to arr in-place using cycle following
-	for (size_t i = 0; i < n; ++i)
-	{
-		// Check if element already correctly positioned
-		if (idxs[i] == i) continue;
-
-		Ty temp = std::move(arr[i]);
-		std::size_t j = i;
-
-		// Follow the cycle
-		while (idxs[j] != i)
-		{
-			size_t next = idxs[j];
-			arr[j] = std::move(arr[next]);
-			idxs[j] = j;
-			j = next;
-		}
-
-		// One final swap to close the cycle
-		arr[j] = std::move(temp);
-		idxs[j] = j;
-	}
 }
 
 void PrefixGeneratorV4::GenerateMulti(bool isFirst)
 {
 	// Reset global state
 	globalPrefixes.clear();
-	globalNumOutputs.clear();
 	globalLayerIdx = 0;
 
 	// Launch worker threads
@@ -156,8 +109,9 @@ void PrefixGeneratorV4::GenerateMulti(bool isFirst)
 	std::println("Generated {} prefixes", globalPrefixes.size());
 
 	// Sort prefixes in descending order of num outputs
-	SortProjected(globalPrefixes, globalNumOutputs, true);
-	globalNumOutputs.clear();
+	std::sort(globalPrefixes.begin(), globalPrefixes.end(), [](const PrefixDescriptor& a, const PrefixDescriptor& b) {
+		return a.numOutputs > b.numOutputs;
+		});
 }
 
 void PrefixGeneratorV4::OutputPruneWorker()
@@ -230,45 +184,58 @@ void PrefixGeneratorV4::OutputPruneMulti()
 	SanitizeGlobalPrefixes();
 }
 
-void PrefixGeneratorV4::EquivalencePruneWorker()
+void PrefixGeneratorV4::OutputEquivPruneWorker(const std::vector<std::pair<size_t, size_t>>& outputClasses)
 {
 	for (;;)
 	{
-		// Get a previous index to work on
-		size_t prevIdx = globalPrevIdx.fetch_add(1, std::memory_order_relaxed);
-		if (prevIdx >= prevPrefixes.size()) return;
+		// Get an  output class to work on
+		size_t outputClassIdx = globalOutputClass.fetch_add(1, std::memory_order_relaxed);
+		if (outputClassIdx >= outputClasses.size()) return;
+		auto [classStart, classEnd] = outputClasses[outputClassIdx];
 
-		std::unordered_set<NetworkGraph, NetworkGraphHasher> graphs;
-		for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
+		IsomorphicOutputSetV2 graphs{ this };
+		for (size_t prefixIdx = classStart; prefixIdx < classEnd; prefixIdx++)
 		{
 			PrefixDescriptor& descriptor = globalPrefixes[prefixIdx];
-			if (descriptor.prevIdx != prevIdx) continue;
 
-			LayeredNetwork network{ prevPrefixes[prevIdx] + allLayers[descriptor.layerIdx] };
-			NetworkGraph graph{ network, n, symmetric };
-
-			auto [_, inserted] = graphs.emplace(std::move(graph));
+			bool inserted = graphs.TryInsert(descriptor.prevIdx, descriptor.layerIdx);
 			if (!inserted) descriptor.isSubsumed = true;
 		}
 	}
 }
 
-void PrefixGeneratorV4::EquivalencePruneMulti()
+void PrefixGeneratorV4::OutputEquivPruneMulti()
 {
 	// Reset global state
-	globalPrevIdx = 0;
+	globalOutputClass = 0;
+
+	// Determine output classes
+	std::vector<std::pair<size_t, size_t>> outputClasses;
+	size_t currentClassStart = 0;
+	size_t currentClass = globalPrefixes[0].numOutputs;
+	for (size_t prefixIdx = 1; prefixIdx < globalPrefixes.size(); prefixIdx++)
+	{
+		if (globalPrefixes[prefixIdx].numOutputs == currentClass) continue;
+
+		// End of class reached
+		outputClasses.emplace_back(currentClassStart, prefixIdx);
+		currentClassStart = prefixIdx;
+		currentClass = globalPrefixes[prefixIdx].numOutputs;
+	}
+	if (currentClassStart < globalPrefixes.size())
+		outputClasses.emplace_back(currentClassStart, globalPrefixes.size());
 
 	// Launch worker threads
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
 	std::vector<std::thread> threads;
 	for (size_t i = 0; i < numThreads; i++)
-		threads.emplace_back([this]() { EquivalencePruneWorker(); });
+		threads.emplace_back([this, &outputClasses]() { OutputEquivPruneWorker(outputClasses); });
 
 	for (;;)
 	{
-		size_t progress = globalPrevIdx.load(std::memory_order_relaxed);
-		if (progress >= prevPrefixes.size()) break;
-		std::print("Pruning {:>7.3f}%\r", (double)progress / prevPrefixes.size() * 100.0);
+		size_t progress = globalOutputClass.load(std::memory_order_relaxed);
+		if (progress >= outputClasses.size()) break;
+		std::print("Pruning {:>7.3f}%\r", (double)progress / outputClasses.size() * 100.0);
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
 	}
 
@@ -276,18 +243,6 @@ void PrefixGeneratorV4::EquivalencePruneMulti()
 	for (auto& thread : threads) thread.join();
 
 	SanitizeGlobalPrefixes();
-}
-
-void PrefixGeneratorV4::SanitizeGlobalPrefixes()
-{
-	// Erase subsumed prefixes from globalPrefixes
-	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
-		return descriptor.isSubsumed;
-		});
-
-	// Reset all descriptors
-	for (PrefixDescriptor& descriptor : globalPrefixes)
-		descriptor.ResetUnatomic();
 }
 
 void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
@@ -306,40 +261,7 @@ void PrefixGeneratorV4::PruneWorker(size_t workerIdx, size_t maxSearches)
 		std::vector<uint64_t> outputs = GetOutputs(descriptor.prevIdx, descriptor.layerIdx).ToVector();
 		descriptor.ComputeSignature(outputs);
 
-		// Check if subsumed in the range [0, prefixIdx)
-		bool subsumed = false;
-		for (size_t otherPrefixIdx = 0; otherPrefixIdx < prefixIdx; otherPrefixIdx++)
-		{
-			// Check if either descriptor is subsumed
-			PrefixDescriptor& otherDescriptor = globalPrefixes[prefixIdx - 1 - otherPrefixIdx];
-			if (descriptor.isSubsumed) break;
-			if (otherDescriptor.isSubsumed) continue;
-
-			// Compare signatures
-			otherDescriptor.WaitForSignature();
-			if (descriptor.signature.GetNumOutputs() > otherDescriptor.signature.GetNumOutputs()) break;
-			if (otherDescriptor.signature > descriptor.signature) continue;
-
-			// Increment thread counter
-			threadCounters[workerIdx].value.store(++threadCounter, std::memory_order_release);
-
-			// Run a full backtracking subsumption test
-			std::vector<uint64_t> otherOutputs = GetOutputs(otherDescriptor.prevIdx, otherDescriptor.layerIdx).ToVector();
-			if (symmetric) std::erase_if(otherOutputs, [this](uint64_t x) { return HasSmallerMirror(n, x); });
-			if (solver.Solve(otherOutputs, outputs) == DoesSubsume)
-			{
-				subsumed = true;
-				break;
-			}
-		}
-
-		if (subsumed)
-		{
-			descriptor.MarkSubsumed();
-			continue;
-		}
-
-		// Now that outputs is on the LHS of the subsumption tests, strip mirrors
+		// Strip mirrors from outputs in symmetric mode
 		if (symmetric)
 			std::erase_if(outputs, [this](uint64_t x) { return HasSmallerMirror(n, x); });
 
@@ -420,9 +342,27 @@ void PrefixGeneratorV4::PruneMulti(size_t maxSearches)
 	// Join all threads
 	for (auto& thread : threads) thread.join();
 	cleanupThread.join();
-	std::println("Pruning 100.000%");
 
 	SanitizeGlobalPrefixes();
+}
+
+FactoredOutputSet PrefixGeneratorV4::GetOutputs(size_t prevIdx, size_t layerIdx) const
+{
+	FactoredOutputSet outputs{ prevOutputs[prevIdx] };
+	outputs.ApplyCEs(allLayers[layerIdx]);
+	return outputs;
+}
+
+void PrefixGeneratorV4::SanitizeGlobalPrefixes()
+{
+	// Erase subsumed prefixes from globalPrefixes
+	std::erase_if(globalPrefixes, [](const PrefixDescriptor& descriptor) {
+		return descriptor.isSubsumed;
+		});
+
+	// Reset all descriptors
+	for (PrefixDescriptor& descriptor : globalPrefixes)
+		descriptor.ResetUnatomic();
 }
 
 std::vector<Network> PrefixGeneratorV4::GetAllPrefixes()

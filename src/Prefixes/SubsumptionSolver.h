@@ -46,7 +46,7 @@ protected:
 	void Assign(uint8_t src, uint8_t dst);
 	void Unassign(uint8_t dst);
 	uint64_t ReverseBits(uint64_t x) const;
-	void FilterDomains(std::vector<uint64_t>& domains, uint64_t ax, uint64_t bx);
+	void FilterDomains(std::vector<uint64_t>& domains, uint64_t ax, uint64_t bx) const;
 	bool IsValidPermutation(std::vector<uint64_t>& domains);
 	bool Search(const std::vector<uint64_t>& domains);
 	void ResetSearchState();

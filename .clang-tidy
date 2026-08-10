@@ -20,7 +20,8 @@ readability-*,
 -readability-avoid-return-with-void-value,
 -readability-avoid-unconditional-preprocessor-if,
 -readability-function-cognitive-complexity,
--readability-use-anyofallof
+-readability-use-anyofallof,
+-performance-inefficient-vector-operation
 '
 
 WarningsAsErrors: ''

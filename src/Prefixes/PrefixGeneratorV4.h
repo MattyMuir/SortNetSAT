@@ -29,31 +29,32 @@ protected:
 
 	// Generating state
 	std::vector<PrefixDescriptor> globalPrefixes;
-	std::vector<size_t> globalNumOutputs;
 	std::mutex appendMutex;
 	std::atomic<size_t> globalLayerIdx;
 
 	// Pruning state
-	std::atomic<size_t> globalPrevIdx, globalPrefixIdx;
+	std::atomic<size_t> globalOutputClass, globalPrefixIdx;
 	struct alignas(64) ThreadCounter { std::atomic<uint64_t> value{ 0 }; };
 	std::vector<ThreadCounter> threadCounters;
 
+	// Generating
 	void CachePreviousOutputs();
-	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx) const;
 	void GenerateWorker(bool isFirst);
 	void GenerateMulti(bool isFirst);
 
+	// Pruning
 	void OutputPruneWorker();
 	void OutputPruneMulti();
-
-	void EquivalencePruneWorker();
-	void EquivalencePruneMulti();
-
-	// Multi-threaded prune
-	void SanitizeGlobalPrefixes();
+	void OutputEquivPruneWorker(const std::vector<std::pair<size_t, size_t>>& outputClasses);
+	void OutputEquivPruneMulti();
 	void PruneWorker(size_t workerIdx, size_t maxSearches);
 	void CleanupWorker();
 	void PruneMulti(size_t maxSearches = 0);
 
+	// Helpers
+	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx) const;
+	void SanitizeGlobalPrefixes();
 	std::vector<Network> GetAllPrefixes();
+
+	friend class IsomorphicOutputSetV2;
 };

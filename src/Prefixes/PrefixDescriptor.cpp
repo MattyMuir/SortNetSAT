@@ -2,12 +2,12 @@
 
 #include <thread>
 
-PrefixDescriptor::PrefixDescriptor(size_t prevIdx_, size_t layerIdx_, uint8_t n)
-	: prevIdx(prevIdx_), layerIdx(layerIdx_), signature(n), isEmpty(true), isSubsumed(false)
+PrefixDescriptor::PrefixDescriptor(size_t prevIdx_, size_t layerIdx_, size_t numOutputs_, uint8_t n)
+	: prevIdx(prevIdx_), layerIdx(layerIdx_), numOutputs(numOutputs_), signature(n), isEmpty(true), isSubsumed(false)
 {}
 
 PrefixDescriptor::PrefixDescriptor(PrefixDescriptor&& other) noexcept
-	: prevIdx(other.prevIdx), layerIdx(other.layerIdx), signature(std::move(other.signature)),
+	: prevIdx(other.prevIdx), layerIdx(other.layerIdx), numOutputs(other.numOutputs), signature(std::move(other.signature)),
 	isEmpty(other.isEmpty.load()), isSubsumed(other.isSubsumed)
 {}
 
@@ -15,6 +15,7 @@ PrefixDescriptor& PrefixDescriptor::operator=(PrefixDescriptor&& other) noexcept
 {
 	prevIdx = other.prevIdx;
 	layerIdx = other.layerIdx;
+	numOutputs = other.numOutputs;
 	signature = std::move(other.signature);
 	isEmpty = other.isEmpty.load(std::memory_order_relaxed);
 	isSubsumed = other.isSubsumed;

@@ -119,7 +119,7 @@ uint64_t SubsumptionSolver::ReverseBits(uint64_t x) const
 	return x;
 }
 
-void SubsumptionSolver::FilterDomains(std::vector<uint64_t>& domains, uint64_t ax, uint64_t bx)
+void SubsumptionSolver::FilterDomains(std::vector<uint64_t>& domains, uint64_t ax, uint64_t bx) const
 {
 	for (uint8_t src = 0; src < n; src++)
 	{
