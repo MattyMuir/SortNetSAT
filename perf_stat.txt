@@ -1,0 +1,17 @@
+# started on Sun Jul 26 19:26:09 2026
+
+
+ Performance counter stats for './build/src/SortNetSAT':
+
+ 2,015,511,676,522      cycles:u                  #    3.114 GHz                    
+ 1,695,370,525,580      instructions:u            #    0.84  insn per cycle         
+    13,072,569,049      cache-references:u        #   20.199 M/sec                  
+     3,584,206,775      cache-misses:u            #   27.418 % of all cache refs    
+        647,202.51 msec task-clock:u              #   49.651 CPUs utilized          
+
+      13.035091229 seconds time elapsed
+
+     624.896052000 seconds user
+      15.728505000 seconds sys
+
+
