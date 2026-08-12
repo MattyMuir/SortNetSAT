@@ -6,8 +6,8 @@
 
 #include "Prefixes/prefixes.h"
 
-IncrementalExtender::IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix)
-	: Extender(n_, d_, symmetric_, prefix), generator(n, dPost, symmetric)
+IncrementalExtender::IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix, bool logging_)
+	: Extender(n_, d_, symmetric_, prefix), logging(logging_), generator(n, dPost, symmetric)
 {
 	solver.verbosity = 0;
 }
@@ -19,7 +19,8 @@ void IncrementalExtender::SetParameters(size_t maxAddNum_)
 
 bool IncrementalExtender::Extend()
 {
-	std::println("Total Outputs: {}", prefixOutputs.size());
+	if (logging)
+		std::println("Total Outputs: {}", prefixOutputs.size());
 
 	// Generate core network structural requirements and definitions
 	generator.Generate();
@@ -85,6 +86,7 @@ std::vector<IncrementalExtender::FailingInput> IncrementalExtender::GetFailingIn
 
 void IncrementalExtender::LogProgress(size_t numFailing) const
 {
+	if (!logging) return;
 	double passing = 1.0 - (double)numFailing / prefixOutputs.size();
 	std::print("{} inputs, width {}, {:.3f}% passing\r", includedInputs.size(), WindowWidth(n, includedInputs, symmetric), passing * 100.0);
 }

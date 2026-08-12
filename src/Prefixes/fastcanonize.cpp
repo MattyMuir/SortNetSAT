@@ -70,6 +70,7 @@ void RefineColouring(std::vector<uint8_t>& colours, const std::vector<uint64_t>&
 					coordHashes[bi] += xHash;
 		}
 
+		// Recolour positions of coordinate hashes differ
 		uint8_t numColours = std::ranges::max(colours) + 1;
 		std::vector<uint8_t> newColours(n);
 		uint8_t nextColour = 0;

@@ -13,13 +13,14 @@ protected:
 	};
 
 public:
-	IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix);
+	IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix, bool logging_ = true);
 
 	void SetParameters(size_t maxAddNum_);
 	bool Extend() override;
 	Network GetNetwork() const override;
 
 protected:
+	bool logging;
 	size_t maxAddNum = 4;
 
 	FormulaGenerator generator;

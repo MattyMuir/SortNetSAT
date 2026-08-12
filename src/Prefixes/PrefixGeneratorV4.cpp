@@ -5,6 +5,7 @@
 #include <numeric>
 #include <unordered_set>
 #include <algorithm>
+#include <ranges>
 
 #include "IsomorphicOutputSetV2.h"
 
@@ -29,13 +30,15 @@ std::vector<Network> PrefixGeneratorV4::GeneratePrefixes()
 		GenerateMulti(prevD == 0);
 
 		// Pruning
-		OutputPruneMulti();
+		OutputSubsetPruneMulti();
 		std::println("Pruned to {}    ", globalPrefixes.size());
 		OutputEquivPruneMulti();
 		std::println("Pruned to {}    ", globalPrefixes.size());
-		PruneMulti(100);
+		PruneMulti();
+		/*
 		std::println("Pruned to {}    ", globalPrefixes.size());
 		PruneMulti();
+		*/
 
 		// Update prevPrefixes
 		prevPrefixes = GetAllPrefixes();
@@ -114,7 +117,7 @@ void PrefixGeneratorV4::GenerateMulti(bool isFirst)
 		});
 }
 
-void PrefixGeneratorV4::OutputPruneWorker()
+void PrefixGeneratorV4::OutputSubsetPruneWorker()
 {
 	for (;;)
 	{
@@ -159,7 +162,7 @@ next_prefix:
 	}
 }
 
-void PrefixGeneratorV4::OutputPruneMulti()
+void PrefixGeneratorV4::OutputSubsetPruneMulti()
 {
 	// Initialize global state
 	globalPrefixIdx = 0;
@@ -168,7 +171,7 @@ void PrefixGeneratorV4::OutputPruneMulti()
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
 	std::vector<std::thread> threads;
 	for (size_t i = 0; i < numThreads; i++)
-		threads.emplace_back([this]() { OutputPruneWorker(); });
+		threads.emplace_back([this]() { OutputSubsetPruneWorker(); });
 
 	for (;;)
 	{
@@ -192,6 +195,7 @@ void PrefixGeneratorV4::OutputEquivPruneWorker(const std::vector<std::pair<size_
 		size_t outputClassIdx = globalOutputClass.fetch_add(1, std::memory_order_relaxed);
 		if (outputClassIdx >= outputClasses.size()) return;
 		auto [classStart, classEnd] = outputClasses[outputClassIdx];
+		if (classEnd - classStart <= 1) continue;
 
 		IsomorphicOutputSetV2 graphs{ this };
 		for (size_t prefixIdx = classStart; prefixIdx < classEnd; prefixIdx++)
@@ -211,19 +215,12 @@ void PrefixGeneratorV4::OutputEquivPruneMulti()
 
 	// Determine output classes
 	std::vector<std::pair<size_t, size_t>> outputClasses;
-	size_t currentClassStart = 0;
-	size_t currentClass = globalPrefixes[0].numOutputs;
-	for (size_t prefixIdx = 1; prefixIdx < globalPrefixes.size(); prefixIdx++)
+	auto sameNumOutputs = [](const PrefixDescriptor& d1, const PrefixDescriptor& d2) { return d1.numOutputs == d2.numOutputs; };
+	for (auto outputClass : globalPrefixes | std::views::chunk_by(sameNumOutputs))
 	{
-		if (globalPrefixes[prefixIdx].numOutputs == currentClass) continue;
-
-		// End of class reached
-		outputClasses.emplace_back(currentClassStart, prefixIdx);
-		currentClassStart = prefixIdx;
-		currentClass = globalPrefixes[prefixIdx].numOutputs;
+		size_t startIdx = std::distance(globalPrefixes.begin(), outputClass.begin());
+		outputClasses.emplace_back(startIdx, startIdx + outputClass.size());
 	}
-	if (currentClassStart < globalPrefixes.size())
-		outputClasses.emplace_back(currentClassStart, globalPrefixes.size());
 
 	// Launch worker threads
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
@@ -233,9 +230,9 @@ void PrefixGeneratorV4::OutputEquivPruneMulti()
 
 	for (;;)
 	{
-		size_t progress = globalOutputClass.load(std::memory_order_relaxed);
-		if (progress >= outputClasses.size()) break;
-		std::print("Pruning {:>7.3f}%\r", (double)progress / outputClasses.size() * 100.0);
+		size_t classIdx = globalOutputClass.load(std::memory_order_relaxed);
+		if (classIdx >= outputClasses.size()) break;
+		std::print("Pruning {:>7.3f}%\r", (double)outputClasses[classIdx].first / globalPrefixes.size() * 100.0);
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
 	}
 

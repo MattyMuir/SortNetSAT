@@ -1,146 +1,82 @@
 #include <print>
-#include <fstream>
+#include <ranges>
 #include <algorithm>
-#include <set>
 #include <numeric>
+#include <chrono>
 
 #include "Timer.h"
-
 #include "Prefixes/prefixes.h"
-#include "SimpleExtender.h"
-#include "IncrementalExtender.h"
-#include "Prefixes/PrefixGenerator.h"
-#include "OldPrefixes/PrefixGeneratorV2.h"
-#include "OldPrefixes/PrefixGeneratorV3.h"
-#include "OldPrefixes/LayerDAG.h"
-#include "Prefixes/WindowMinimizer.h"
-#include "OldPrefixes/NetworkGraph.h"
-#include "Prefixes/SubsumptionSolver.h"
 #include "Prefixes/PrefixGeneratorV4.h"
+#include "IncrementalExtender.h"
+#include "BulkChecker.h"
 
-void FractionBenchmark()
+template <typename Ty, typename Proj>
+static inline void SortProjected(std::vector<Ty>& arr, const std::vector<Proj>& proj, bool reverse = false)
 {
-	// === Parameters ===
-	uint8_t n = 16;
-	uint8_t d = 9;
-	bool symmetric = true;
-	Network prefix = { {
-			{0,5},{1,4},{2,12},{3,13},{6,7},{8,9},{10,15},{11,14},
-			{0,2},{1,10},{3,6},{4,7},{5,14},{8,11},{9,12},{13,15}
-		} };
-	// ==================
+	// Initialize index array
+	size_t n = arr.size();
+	std::vector<std::size_t> idxs(n);
+	std::iota(idxs.begin(), idxs.end(), std::size_t{ 0 });
 
-	static constexpr size_t Repeats = 15;
+	// Sort index array
+	std::sort(idxs.begin(), idxs.end(), [&proj, reverse](size_t idx0, size_t idx1) {
+		return reverse ? (proj[idx0] > proj[idx1]) : (proj[idx0] < proj[idx1]);
+		});
 
-	std::vector<double> times;
-	for (size_t f = 1; f <= 20; f += 1)
+	// Apply the permutation to arr in-place using cycle following
+	for (size_t i = 0; i < n; ++i)
 	{
-		double inputFraction = f / 100.0;
-		std::println("Starting {}", inputFraction);
+		// Check if element already correctly positioned
+		if (idxs[i] == i) continue;
 
-		double timeSum = 0.0;
-		for (size_t i = 0; i < Repeats; i++)
+		Ty temp = std::move(arr[i]);
+		std::size_t j = i;
+
+		// Follow the cycle
+		while (idxs[j] != i)
 		{
-			SimpleExtender extender{ n, d, symmetric, prefix };
-			Timer t;
-			extender.Extend();
-			t.Stop();
-			timeSum += log(t.GetSeconds());
+			size_t next = idxs[j];
+			arr[j] = std::move(arr[next]);
+			idxs[j] = j;
+			j = next;
 		}
-		times.push_back(timeSum / Repeats);
+
+		// One final swap to close the cycle
+		arr[j] = std::move(temp);
+		idxs[j] = j;
 	}
-
-	for (double t : times)
-		std::println("{}", t);
 }
 
-void Wang()
+void CheckAllPrefixes()
 {
-	// === Parameters ===
-	uint8_t n = 28;
-	uint8_t d = 13;
-	bool symmetric = true;
-	Network prefix = { {
-			{0,27},{1,26},{2,25},{3,24},{4,23},{5,22},{6,21},{7,20},{8,9},{10,11},{12,15},{13,14},{16,17},{18,19},
-			{0,1},{2,3},{4,5},{6,7},{8,10},{9,11},{12,14},{13,15},{16,18},{17,19},{20,21},{22,23},{24,25},{26,27},
-			{0,2},{1,3},{4,6},{5,7},{8,19},{9,12},{10,14},{11,16},{13,17},{15,18},{20,22},{21,23},{24,26},{25,27},
-			{0,4},{1,5},{2,20},{3,21},{6,24},{7,25},{8,13},{9,11},{10,17},{12,15},{14,19},{16,18},{22,26},{23,27},
-			//{1,2},{3,24},{4,6},{5,22},{7,20},{8,9},{10,12},{11,13},{14,16},{15,17},{18,19},{21,23},{25,26},
-			//{0,8},{1,4},{2,6},{3,9},{5,7},{10,11},{12,13},{14,15},{16,17},{18,24},{19,27},{20,22},{21,25},{23,26}
-		} };
-	// ==================
+	std::vector<Network> allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
+	std::ranges::reverse(allPrefixes);
 
-	IncrementalExtender extender{ n, d, symmetric, prefix };
-	bool extendable = extender.Extend();
-	if (!extendable) std::println("Unextendable!");
-	else std::println("{:t}", extender.GetNetwork());
-}
-
-void Net18Full()
-{
 	// === Parameters ===
 	uint8_t n = 18;
 	uint8_t d = 10;
 	bool symmetric = true;
-	Network prefix = { {
-			{0,6},{1,10},{2,15},{3,5},{4,9},{7,16},{8,13},{11,17},{12,14},
-			{0,12},{1,4},{3,11},{5,17},{6,14},{7,8},{9,10},{13,16}
-		} };
 	// ==================
 
-	SimpleExtender extender{ n, d, symmetric, prefix };
-	bool extendable = extender.Extend();
-	if (!extendable) std::println("Unextendable!");
-	else std::println("{:l}", extender.GetNetwork());
-}
-
-void GenerateCactusPlot()
-{
-	// === Parameters ===
-	uint8_t n = 17;
-	uint8_t d = 8;
-	bool symmetric = false;
-	// ==================
-
-	std::ifstream file{ "C:/sdks/JCSS/prefixes/opt/pref_opt17.txt" };
-
-	std::vector<double> times;
-	for (size_t i = 0; i < 50; i++)
+	auto startTime = std::chrono::system_clock::now();
+	for (size_t prefixIdx = 0; prefixIdx < allPrefixes.size(); prefixIdx++)
 	{
-		std::string prefixStr;
-		std::getline(file, prefixStr);
-		Network prefix = ParseNetwork(prefixStr);
+		const Network& prefix = allPrefixes[prefixIdx];
 
 		IncrementalExtender extender{ n, d, symmetric, prefix };
-		extender.SetParameters(6);
-		Timer t;
-		extender.Extend();
-		t.Stop();
-		times.push_back(t.GetSeconds());
+		bool extendable = extender.Extend();
+		auto elapsed = std::chrono::system_clock::now() - startTime;
+		std::println("{:<5}   {:>7.3f}%   {:%T}   {:>7.3f}s | {}",
+			prefixIdx,
+			(double)prefixIdx / allPrefixes.size() * 100.0,
+			elapsed,
+			std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() / (prefixIdx + 1) * 1e-3,
+			extendable ? "=== EXTENDABLE ===" : "Unextendable");
 	}
-
-	std::sort(times.begin(), times.end());
-	std::println();
-	for (double t : times) std::println("{:.3f}", t);
 }
-
-void EquivTest();
-void OutputEquivTest();
 
 int main()
 {
-#if 0
-	PrefixGeneratorV4 generator{ 18, 3, true };
-	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_2_sym.txt"));
-	TIMER(t);
-	auto allPrefixes = generator.GeneratePrefixes();
-	STOP_LOG(t);
-	SavePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt", allPrefixes);
-#endif
-
-	PrefixGeneratorV4 generator{ 16, 3, true };
-	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\16_2_sym.txt"));
-	TIMER(t);
-	auto allPrefixes = generator.GeneratePrefixes();
-	STOP_LOG(t);
+	BulkChecker checker{ 18, 10, true, "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt" };
+	checker.CheckAll();
 }

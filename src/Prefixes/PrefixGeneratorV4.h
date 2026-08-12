@@ -43,8 +43,8 @@ protected:
 	void GenerateMulti(bool isFirst);
 
 	// Pruning
-	void OutputPruneWorker();
-	void OutputPruneMulti();
+	void OutputSubsetPruneWorker();
+	void OutputSubsetPruneMulti();
 	void OutputEquivPruneWorker(const std::vector<std::pair<size_t, size_t>>& outputClasses);
 	void OutputEquivPruneMulti();
 	void PruneWorker(size_t workerIdx, size_t maxSearches);
