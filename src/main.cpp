@@ -5,12 +5,14 @@
 #include <numeric>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 
 #include "Timer.h"
 #include "Prefixes/prefixes.h"
-#include "Prefixes/PrefixGeneratorV4.h"
+#include "Prefixes/PrefixGenerator.h"
 #include "IncrementalExtender.h"
 #include "BulkChecker.h"
+#include "Prefixes/WindowMinimizer.h"
 
 template <typename Ty, typename Proj>
 static inline void SortProjected(std::vector<Ty>& arr, const std::vector<Proj>& proj, bool reverse = false)
@@ -79,8 +81,16 @@ void CheckAllPrefixes()
 
 int main()
 {
+	/*
 	std::println("Starting in {}", std::filesystem::current_path().string());
 	std::cout << std::flush;
 	BulkChecker checker{ 18, 10, true, "./prefixes/18_3_sym.txt" };
 	checker.CheckAll();
+	*/
+
+	PrefixGenerator generator{ 16, 3, true };
+	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\16_2_sym.txt"));
+	TIMER(t);
+	auto allPrefix = generator.GeneratePrefixes();
+	STOP_LOG(t);
 }

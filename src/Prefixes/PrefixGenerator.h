@@ -1,71 +1,60 @@
 #pragma once
-#include <optional>
+#include <thread>
+#include <atomic>
+#include <mutex>
 
 #include <sortnetutils.h>
-#include "BS/BS_thread_pool.hpp"
 
 #include "SubsumptionSolver.h"
+#include "PrefixDescriptor.h"
 
 class PrefixGenerator
 {
-protected:
-	struct ThreadStatus
-	{
-		double progress;
-	};
-
-	struct NetworkSignature
-	{
-		size_t popcountSum;
-		std::vector<size_t> t2, t3z, t3o, t5, t6;
-		std::vector<std::vector<size_t>> t5c;
-	};
-
-	struct NetworkMeta
-	{
-		Network prefix;
-		size_t numOutputs;
-		std::optional<std::vector<uint64_t>> outputs = std::nullopt;
-		std::optional<NetworkSignature> signature = std::nullopt;
-	};
-
 public:
 	PrefixGenerator(uint8_t n_, uint8_t d_, bool symmetric_);
 
+	void LoadPrevious(uint8_t prevD_, const std::vector<Network>& prevPrefixes_);
 	std::vector<Network> GeneratePrefixes();
-	std::vector<double> GetTimings();
 
 protected:
+	// Constant state
 	uint8_t n, d;
 	bool symmetric;
-	BS::thread_pool<BS::tp::none> pool;
-	std::unordered_map<std::thread::id, ThreadStatus> status;
-
 	std::vector<Network> allLayers;
-	std::vector<NetworkMeta> allPrefixes;
-	std::vector<double> timings;
+
+	// Previous prefixes state
+	uint8_t prevD = 0;
+	std::vector<Network> prevPrefixes;
+	std::vector<FactoredOutputSet> prevOutputs;
+
+	// Generating state
+	std::vector<PrefixDescriptor> globalPrefixes;
+	std::mutex appendMutex;
+	std::atomic<size_t> globalLayerIdx;
+
+	// Pruning state
+	std::atomic<size_t> globalOutputClass, globalPrefixIdx;
+	struct alignas(64) ThreadCounter { std::atomic<uint64_t> value{ 0 }; };
+	std::vector<ThreadCounter> threadCounters;
 
 	// Generating
-	void Generate(bool isFirst);
-	void SortByOutputs(std::vector<size_t>& idxs);
+	void CachePreviousOutputs();
+	void GenerateWorker(bool isFirst);
+	void GenerateMulti(bool isFirst);
 
 	// Pruning
-	void CacheOutputs(NetworkMeta& network);
-	static void ClearCache(NetworkMeta& network);
-	void Prune(std::vector<size_t>& idxs, size_t maxSearches = 0);
-	void Remove(std::vector<size_t>& si, const std::vector<size_t>& sj, size_t maxSearches = 0);
-	void ParallelPrune(std::vector<size_t>& idxs, size_t maxSearches = 0);
+	void OutputSubsetPruneWorker();
+	void OutputSubsetPruneMulti();
+	void OutputEquivPruneWorker(const std::vector<std::pair<size_t, size_t>>& outputClasses);
+	void OutputEquivPruneMulti();
+	void PruneWorker(size_t workerIdx, size_t maxSearches);
+	void CleanupWorker();
+	void PruneMulti(size_t maxSearches = 0);
 
-	// Signatures
-	std::vector<std::vector<uint64_t>> SplitIntoClusters(const std::vector<uint64_t>& outputs) const;
-	std::vector<size_t> T5Signature(const std::vector<uint64_t>& outputs) const;
-	std::vector<size_t> T6Signature(const std::vector<uint64_t>& outputs) const;
-	NetworkSignature ComputeSignature(const std::vector<uint64_t>& outputs) const;
+	// Helpers
+	FactoredOutputSet GetOutputs(size_t prevIdx, size_t layerIdx) const;
+	void SanitizeGlobalPrefixes();
+	std::vector<Network> GetAllPrefixes();
 
-	// Prechecking
-	bool TPrecheck(const std::vector<size_t>& at, const std::vector<size_t>& bt, size_t aSize, size_t bSize) const;
-	SubsumptionResult SignaturePrecheck(const NetworkMeta& a, const NetworkMeta& b) const;
-
-	// Subsumption
-	bool Subsumes(const NetworkMeta& a, const NetworkMeta& b, SubsumptionSolver& solver);
+	friend class IsomorphicOutputSet;
 };

@@ -1,12 +1,12 @@
-#include "IsomorphicOutputSetV2.h"
+#include "IsomorphicOutputSet.h"
 
 #include <algorithm>
 
-#include "PrefixGeneratorV4.h"
+#include "PrefixGenerator.h"
 #include "fastcanonize.h"
 #include "gicanonize.h"
 
-uint64_t IsomorphicOutputSetV2::OutputsKeyHasher::operator()(const OutputsKey& key) const
+uint64_t IsomorphicOutputSet::OutputsKeyHasher::operator()(const OutputsKey& key) const
 {
 	return key.hash;
 }
@@ -35,7 +35,7 @@ static inline bool AreEqual(const std::vector<uint64_t>& a, const std::vector<ui
 	return areEqual;
 }
 
-bool IsomorphicOutputSetV2::OutputsKeyEq::operator()(const OutputsKey& aKey, const OutputsKey& bKey) const
+bool IsomorphicOutputSet::OutputsKeyEq::operator()(const OutputsKey& aKey, const OutputsKey& bKey) const
 {
 	if (aKey.hash != bKey.hash) return false;
 
@@ -48,7 +48,7 @@ bool IsomorphicOutputSetV2::OutputsKeyEq::operator()(const OutputsKey& aKey, con
 	return AreEqual(aOutputs, bOutputs, aKey.canonicalPerm.size());
 }
 
-IsomorphicOutputSetV2::IsomorphicOutputSetV2(PrefixGeneratorV4* generator_)
+IsomorphicOutputSet::IsomorphicOutputSet(PrefixGenerator* generator_)
 	: generator(generator_), set(0, OutputsKeyHasher{}, OutputsKeyEq{ generator }) {}
 
 static inline Permutation CanonicalPermutation(const std::vector<uint64_t>& outputs, uint8_t n, bool symmetric)
@@ -59,7 +59,7 @@ static inline Permutation CanonicalPermutation(const std::vector<uint64_t>& outp
 	return GICanonize(outputs, n, symmetric);
 }
 
-bool IsomorphicOutputSetV2::TryInsert(size_t prevIdx, size_t layerIdx)
+bool IsomorphicOutputSet::TryInsert(size_t prevIdx, size_t layerIdx)
 {
 	// Compute the canonical permutation of these outputs
 	std::vector<uint64_t> outputs = generator->GetOutputs(prevIdx, layerIdx).ToVector();

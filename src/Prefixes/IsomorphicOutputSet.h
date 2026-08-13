@@ -3,9 +3,9 @@
 
 #include <sortnetutils.h>
 
-class PrefixGeneratorV4;
+class PrefixGenerator;
 
-class IsomorphicOutputSetV2
+class IsomorphicOutputSet
 {
 protected:
 	struct OutputsKey
@@ -22,17 +22,17 @@ protected:
 
 	struct OutputsKeyEq
 	{
-		PrefixGeneratorV4* generator;
+		PrefixGenerator* generator;
 
 		bool operator()(const OutputsKey& aKey, const OutputsKey& bKey) const;
 	};
 
 public:
-	IsomorphicOutputSetV2(PrefixGeneratorV4* generator_);
+	IsomorphicOutputSet(PrefixGenerator* generator_);
 
 	bool TryInsert(size_t prevIdx, size_t layerIdx);
 
 protected:
-	PrefixGeneratorV4* generator;
+	PrefixGenerator* generator;
 	std::unordered_set<OutputsKey, OutputsKeyHasher, OutputsKeyEq> set;
 };
