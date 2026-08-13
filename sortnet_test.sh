@@ -11,5 +11,5 @@
 #SBATCH -e runs/test-err.log
  
 # Commands to be run:
-perf stat -e cycles,instructions,cache-references,cache-misses,task-clock -o perf_stat.txt -- ./build/src/SortNetSAT
-#./build/src/SortNetSAT
+#perf stat -e cycles,instructions,cache-references,cache-misses,task-clock -o perf_stat.txt -- ./build/src/SortNetSAT
+./build/src/SortNetSAT

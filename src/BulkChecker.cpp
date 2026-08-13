@@ -1,7 +1,8 @@
 #include "BulkChecker.h"
 
-#include <thread>
 #include <print>
+#include <iostream>
+#include <thread>
 #include <algorithm>
 
 #include "Prefixes/prefixes.h"
@@ -11,6 +12,8 @@ BulkChecker::BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::str
 	: n(n_), d(d_), symmetric(symmetric_), globalPrefixes(ParsePrefixFile(filepath))
 {
 	std::ranges::reverse(globalPrefixes);
+	std::println("Loaded {} prefixes", globalPrefixes.size());
+	std::cout << std::flush;
 }
 
 void BulkChecker::CheckAll()
@@ -72,4 +75,5 @@ void BulkChecker::LogProgress(size_t prefixIdx, bool extendable, Duration durati
 		ToSeconds(Clock::now() - startTime) / numComplete,
 		prefixIdx,
 		extendable ? "===== EXTENDABLE =====" : "Unextendable");
+	std::cout << std::flush;
 }

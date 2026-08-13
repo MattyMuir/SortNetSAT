@@ -22,8 +22,10 @@ std::vector<uint8_t> InitialColouring(const std::vector<uint64_t>& outputs, uint
 	// Assign colours by increasing sums, giving the same colour to bits with the same sum
 	std::vector<uint8_t> colours(n);
 	uint8_t nextColour = 0;
-	for (auto [prevPos, pos] : sortedPositions | std::views::pairwise)
+	for (size_t i = 1; i < sortedPositions.size(); i++)
 	{
+		uint8_t prevPos = sortedPositions[i - 1];
+		uint8_t pos = sortedPositions[i];
 		if (bitSums[pos] != bitSums[prevPos]) nextColour++;
 		colours[pos] = nextColour;
 	}
@@ -84,8 +86,10 @@ void RefineColouring(std::vector<uint8_t>& colours, const std::vector<uint64_t>&
 			std::ranges::sort(positions, {}, [&](uint8_t i) { return coordHashes[i]; });
 
 			newColours[positions[0]] = nextColour;
-			for (auto [prevPos, pos] : positions | std::views::pairwise)
+			for (size_t i = 1; i < positions.size(); i++)
 			{
+				uint8_t prevPos = positions[i - 1];
+				uint8_t pos = positions[i];
 				if (coordHashes[pos] != coordHashes[prevPos]) nextColour++;
 				newColours[pos] = nextColour;
 			}

@@ -1,8 +1,10 @@
+#include <iostream>
 #include <print>
 #include <ranges>
 #include <algorithm>
 #include <numeric>
 #include <chrono>
+#include <filesystem>
 
 #include "Timer.h"
 #include "Prefixes/prefixes.h"
@@ -77,6 +79,8 @@ void CheckAllPrefixes()
 
 int main()
 {
-	BulkChecker checker{ 18, 10, true, "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt" };
+	std::println("Starting in {}", std::filesystem::current_path().string());
+	std::cout << std::flush;
+	BulkChecker checker{ 18, 10, true, "./prefixes/18_3_sym.txt" };
 	checker.CheckAll();
 }

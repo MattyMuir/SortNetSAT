@@ -3,8 +3,8 @@
 # Request resources:
 #SBATCH -N 1
 #SBATCH -c 128
-#SBATCH --mem=30G
-#SBATCH --time=00:30:00
+#SBATCH --mem=100G
+#SBATCH --time=03:00:00
 #SBATCH --gres=tmp:1G
 #SBATCH -p multi
 #SBATCH -o runs/out-%j.log
