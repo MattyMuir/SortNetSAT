@@ -48,6 +48,8 @@ std::vector<Network> PrefixGenerator::GeneratePrefixes()
 		std::println("Number of {}-layer prefixes: {}", prevD, prevPrefixes.size());
 	}
 
+	// Return prefixes in ascending order of output number
+	std::ranges::reverse(prevPrefixes);
 	return prevPrefixes;
 }
 

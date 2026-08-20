@@ -170,8 +170,5 @@ std::optional<Permutation> FastCanonize(const std::vector<uint64_t>& outputs, ui
 	// If still unresolvable, failed
 	if (!IsResolvable(colours, symmetric)) return std::nullopt;
 
-	if (std::ranges::max(colours) != n - 1)
-		bool sdjkhdsjk = true;
-
 	return symmetric ? ColoursToPermSym(colours) : ColoursToPermUnsym(colours);
 }

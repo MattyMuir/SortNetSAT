@@ -1,20 +1,12 @@
 #pragma once
-#include <cstdint>
-#include <map>
 #include <random>
+#include <span>
 
 #include <sortnetutils.h>
 
 class WindowMinimizer
 {
 protected:
-	struct PermOutputs
-	{
-		Permutation perm;
-		std::vector<uint64_t> outputs;
-	};
-	using Population = std::multimap<uint64_t, PermOutputs>;
-
 	struct BitswapMask
 	{
 		uint64_t stationaryMask, leftMask, rightMask;
@@ -29,13 +21,21 @@ public:
 protected:
 	uint8_t n;
 	bool symmetric;
-	Population globalPopulation;
 	std::mt19937_64 gen;
 
-	void AddToPopulation(Population& population, const PermOutputs& perm) const;
-	void AddToPopulation(Population& population, const Network& prefix) const;
-	BitswapMask GetBitswapMask(uint8_t ch0, uint8_t ch1) const;
+	size_t numOutputs;
+	std::vector<uint64_t> allOutputs;
+	std::vector<uint8_t> allPerms;
+	std::vector<uint64_t> allWindowWidths;
+
+	std::span<uint64_t> GetOutputs(size_t idx);
+	std::span<uint8_t> GetPerm(size_t idx);
+
+	void InitializePopulation(const Network& initialPrefix, size_t populationSize);
+
+	std::pair<uint8_t, uint8_t> RandomPair();
+	BitswapMask GetBitswapMask(uint8_t i, uint8_t j) const;
 	static uint64_t Bitswap(uint64_t x, const BitswapMask& mask);
-	std::pair<uint8_t, uint8_t> RandomPair(uint8_t max);
-	PermOutputs RandomSwap(const PermOutputs& perm);
+	void SwapBits(std::span<uint64_t> dst, std::span<uint64_t> src, uint8_t i, uint8_t j);
+	void CreateChild(size_t dstIdx, size_t srcIdx);
 };

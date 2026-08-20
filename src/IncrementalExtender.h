@@ -13,7 +13,7 @@ protected:
 	};
 
 public:
-	IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix, bool logging_ = true);
+	IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix, bool logging_ = false);
 
 	void SetParameters(size_t maxAddNum_);
 	bool Extend() override;

@@ -6,6 +6,9 @@
 #include <ranges>
 #include <fstream>
 #include <algorithm>
+#include <atomic>
+#include <thread>
+#include <numeric>
 
 Network PrefixPar(uint8_t n)
 {
@@ -30,7 +33,7 @@ uint64_t WindowWidth(uint8_t n, uint64_t input)
 	return n - leadingZeros - tailingOnes;
 }
 
-uint64_t WindowWidth(uint8_t n, const std::vector<uint64_t>& prefixOutputs, bool symmetric)
+uint64_t WindowWidth(uint8_t n, std::span<const uint64_t> prefixOutputs, bool symmetric)
 {
 	uint64_t windowWidth = 0;
 	for (uint64_t output : prefixOutputs)
@@ -157,4 +160,76 @@ void SavePrefixFile(const std::string& filepath, const std::vector<Network>& pre
 	std::ofstream file{ filepath };
 	for (const Network& prefix : prefixes)
 		file << std::format("{}\n", prefix);
+}
+
+template <typename Ty, typename Proj>
+static inline void SortProjected(std::vector<Ty>& arr, const std::vector<Proj>& proj)
+{
+	// Initialize index array
+	size_t n = arr.size();
+	std::vector<std::size_t> idxs(n);
+	std::iota(idxs.begin(), idxs.end(), std::size_t{ 0 });
+
+	// Sort index array
+	std::sort(idxs.begin(), idxs.end(), [&proj](size_t idx0, size_t idx1) {
+		return proj[idx0] < proj[idx1];
+		});
+
+	// Apply the permutation to arr in-place using cycle following
+	for (size_t i = 0; i < n; ++i)
+	{
+		// Check if element already correctly positioned
+		if (idxs[i] == i) continue;
+
+		Ty temp = std::move(arr[i]);
+		std::size_t j = i;
+
+		// Follow the cycle
+		while (idxs[j] != i)
+		{
+			size_t next = idxs[j];
+			arr[j] = std::move(arr[next]);
+			idxs[j] = j;
+			j = next;
+		}
+
+		// One final swap to close the cycle
+		arr[j] = std::move(temp);
+		idxs[j] = j;
+	}
+}
+
+void SortPrefixFile(const std::string& filepath)
+{
+	// Parse prefix file
+	auto allPrefixes = ParsePrefixFile(filepath);
+
+	// Initialize results storage
+	std::vector<size_t> numOutputs(allPrefixes.size());
+
+	// Launch threads
+	std::atomic<size_t> nextPrefixIdx = 0;
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < numThreads; i++)
+	{
+		threads.emplace_back([&]() {
+			for (;;)
+			{
+				size_t prefixIdx = nextPrefixIdx.fetch_add(1, std::memory_order_relaxed);
+				if (prefixIdx >= allPrefixes.size()) break;
+				const Network& prefix = allPrefixes[prefixIdx];
+				size_t num = FactoredOutputSet{ prefix, prefix.InferN() }.Size();
+				numOutputs[prefixIdx] = num;
+			}
+			});
+	}
+
+	// Join threads
+	for (auto& thread : threads)
+		thread.join();
+	
+	// Sort and save prefix file
+	SortProjected(allPrefixes, numOutputs);
+	SavePrefixFile(filepath, allPrefixes);
 }

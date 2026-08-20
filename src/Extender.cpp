@@ -6,7 +6,7 @@ Extender::Extender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefi
 	: n(n_), d(d_), dPost(d - prefix.Depth()), symmetric(symmetric_)
 {
 	WindowMinimizer minimizer{ n, symmetric, 1234 };
-	optimizedPrefix = minimizer.Optimize(prefix, 128, 256);
+	optimizedPrefix = minimizer.Optimize(prefix, 256, 256);
 	OutputSet outputs = GetOutputs(optimizedPrefix, n, true, symmetric);
 	prefixOutputs.assign(outputs.begin(), outputs.end());
 }

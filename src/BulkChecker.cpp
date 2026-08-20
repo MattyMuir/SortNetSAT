@@ -7,11 +7,11 @@
 
 #include "Prefixes/prefixes.h"
 #include "IncrementalExtender.h"
+#include "SimpleExtender.h"
 
 BulkChecker::BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::string& filepath)
 	: n(n_), d(d_), symmetric(symmetric_), globalPrefixes(ParsePrefixFile(filepath))
 {
-	std::ranges::reverse(globalPrefixes);
 	std::println("Loaded {} prefixes", globalPrefixes.size());
 	std::cout << std::flush;
 }
@@ -45,7 +45,7 @@ void BulkChecker::CheckWorker()
 		const Network& prefix = globalPrefixes[prefixIdx];
 
 		// Check if this prefix is extendable
-		IncrementalExtender extender{ n, d, symmetric, prefix, false };
+		IncrementalExtender extender{ n, d, symmetric, prefix };
 		auto start = Clock::now();
 		bool extendable = extender.Extend();
 		auto end = Clock::now();
