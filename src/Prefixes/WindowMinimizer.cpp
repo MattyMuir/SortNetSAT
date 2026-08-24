@@ -1,15 +1,18 @@
 #include "WindowMinimizer.h"
 
 #include <numeric>
+#include <print>
 
 #include "prefixes.h"
 
 WindowMinimizer::WindowMinimizer(uint8_t n_, bool symmetric_, std::mt19937_64::result_type seed)
-	: n(n_), symmetric(symmetric_), gen(seed) {}
+	: n(n_), symmetric(symmetric_), gen(seed)
+{}
 
-Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, size_t populationSize)
+Network WindowMinimizer::Optimize(const Network& initialPrefix_, size_t runs, size_t populationSize)
 {
-	InitializePopulation(initialPrefix, populationSize);
+	initialPrefix = initialPrefix_;
+	InitializePopulation(populationSize);
 
 	std::vector<size_t> idxs(populationSize);
 	std::ranges::iota(idxs, 0);
@@ -31,6 +34,7 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix, size_t runs, siz
 	// Apply this permutation to the initial prefix
 	Network bestPrefix{ initialPrefix };
 	bestPrefix.Permute(bestPerm);
+	bestPrefix.Untangle();
 	return bestPrefix;
 }
 
@@ -46,11 +50,11 @@ std::span<uint8_t> WindowMinimizer::GetPerm(size_t idx)
 	return std::span<uint8_t>(start, n);
 }
 
-void WindowMinimizer::InitializePopulation(const Network& initialPrefix, size_t populationSize)
+void WindowMinimizer::InitializePopulation(size_t populationSize)
 {
 	// Get original outputs
-	std::vector<uint64_t> outputs = FactoredOutputSet{ initialPrefix, n }.ToVector();
-	numOutputs = outputs.size();
+	initialOutputs = FactoredOutputSet{ initialPrefix, n }.ToVector();
+	numOutputs = initialOutputs.size();
 
 	// Allocate memory
 	allOutputs.resize(numOutputs * populationSize);
@@ -58,9 +62,9 @@ void WindowMinimizer::InitializePopulation(const Network& initialPrefix, size_t 
 	allWindowWidths.resize(populationSize);
 
 	// Insert the initial outputs into the population
-	std::ranges::copy(outputs, GetOutputs(0).begin());
+	std::ranges::copy(initialOutputs, GetOutputs(0).begin());
 	std::ranges::iota(GetPerm(0), 0);
-	allWindowWidths[0] = WindowWidth(n, outputs, symmetric);
+	allWindowWidths[0] = WindowWidth(n, initialOutputs, symmetric);
 
 	for (size_t i = 1; i < populationSize; i++)
 		CreateChild(i, i - 1);
@@ -77,40 +81,6 @@ std::pair<uint8_t, uint8_t> WindowMinimizer::RandomPair()
 	return { a, (b == a) ? n - 1U : b };
 }
 
-WindowMinimizer::BitswapMask WindowMinimizer::GetBitswapMask(uint8_t i, uint8_t j) const
-{
-	if (i > j) std::swap(i, j);
-
-	uint64_t leftMask = 1ULL << i;
-	uint64_t rightMask = 1ULL << j;
-
-	if (symmetric && i + j != n - 1)
-	{
-		leftMask |= 1ULL << (n - 1 - j);
-		rightMask |= 1ULL << (n - 1 - i);
-	}
-
-	uint8_t shift = j - i;
-	uint64_t stationaryMask = ~(leftMask | rightMask);
-
-	return { stationaryMask, leftMask, rightMask, shift };
-}
-
-uint64_t WindowMinimizer::Bitswap(uint64_t x, const BitswapMask& mask)
-{
-	uint64_t ret = x = (x & mask.stationaryMask)
-		| ((x & mask.leftMask) << mask.shift)
-		| ((x & mask.rightMask) >> mask.shift);
-	return ret;
-}
-
-void WindowMinimizer::SwapBits(std::span<uint64_t> dst, std::span<uint64_t> src, uint8_t i, uint8_t j)
-{
-	BitswapMask swapMask = GetBitswapMask(i, j);
-	for (size_t writeIdx = 0; writeIdx < src.size(); writeIdx++)
-		dst[writeIdx] = Bitswap(src[writeIdx], swapMask);
-}
-
 void WindowMinimizer::CreateChild(size_t dstIdx, size_t srcIdx)
 {
 	// Generate random channels to swap
@@ -125,9 +95,10 @@ void WindowMinimizer::CreateChild(size_t dstIdx, size_t srcIdx)
 		std::swap(dstPerm[n - 1 - j], dstPerm[n - 1 - i]);
 
 	// Create output set with bits i and j swapped
-	auto srcOutputs = GetOutputs(srcIdx);
+	Permutation outputPerm = initialPrefix.GetOutputPermutation(Permutation{ dstPerm.begin(), dstPerm.end() });
 	auto dstOutputs = GetOutputs(dstIdx);
-	SwapBits(dstOutputs, srcOutputs, i, j);
+	for (size_t i = 0; i < initialOutputs.size(); i++)
+		dstOutputs[i] = outputPerm(initialOutputs[i]);
 
 	// Compute window width
 	allWindowWidths[dstIdx] = WindowWidth(n, dstOutputs, symmetric);

@@ -58,6 +58,11 @@ Network IncrementalExtender::GetNetwork() const
 	return network;
 }
 
+std::vector<uint64_t> IncrementalExtender::GetIncludedInputs() const
+{
+	return includedInputs;
+}
+
 Network IncrementalExtender::ReconstructPostfix() const
 {
 	std::vector<bool> assignment(solver.nVars() + 1);

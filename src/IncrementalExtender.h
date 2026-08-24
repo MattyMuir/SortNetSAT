@@ -18,6 +18,7 @@ public:
 	void SetParameters(size_t maxAddNum_);
 	bool Extend() override;
 	Network GetNetwork() const override;
+	std::vector<uint64_t> GetIncludedInputs() const;
 
 protected:
 	bool logging;
