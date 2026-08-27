@@ -120,6 +120,7 @@ std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<Fail
 	struct InputCost
 	{
 		uint64_t windowWidth, similarity, nonInverted;
+		//uint64_t similarity, windowWidth, nonInverted;
 		auto operator<=>(const InputCost& other) const = default;
 	};
 
@@ -131,7 +132,10 @@ std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<Fail
 		uint64_t windowWidth = WindowWidth(n, failingInput);
 		uint64_t similarity = ComputeSimilarity(failingInput);
 		uint64_t nonInverted = n - CountInversions(failingOutput);
-		scoredFailing.emplace_back(failingIdx, InputCost{ windowWidth, similarity, nonInverted });
+		InputCost cost{ windowWidth, similarity, nonInverted };
+
+		//if (includedInputs.size() % 10 == 0) std::swap(cost.windowWidth, cost.similarity);
+		scoredFailing.emplace_back(failingIdx, cost);
 	}
 
 	// Sort to find failing inputs with the lowest cost to add

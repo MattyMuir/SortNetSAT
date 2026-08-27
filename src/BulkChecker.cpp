@@ -63,8 +63,7 @@ void BulkChecker::CheckWorker()
 		const Network& prefix = globalPrefixes[prefixIdx];
 
 		// Check if this prefix is extendable
-		SimpleExtender extender{ n, d, symmetric, prefix };
-		//extender.SetParameters(6);
+		IncrementalExtender extender{ n, d, symmetric, prefix };
 		auto start = Clock::now();
 		bool extendable = extender.Extend();
 		auto end = Clock::now();

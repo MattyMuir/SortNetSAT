@@ -19,6 +19,8 @@ protected:
 public:
 	SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_ = 0);
 
+	void ForceUntangledPermutation(const Network& bNetwork_);
+
 	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_);
 
 protected:
@@ -26,6 +28,8 @@ protected:
 	uint8_t n;
 	bool symmetric;
 	size_t maxSearches;
+	bool forceUntangled = false;
+	Network bNetwork;
 	const std::vector<uint64_t>* a, * b;
 
 	// === Search State ===
@@ -48,6 +52,7 @@ protected:
 	uint64_t ReverseBits(uint64_t x) const;
 	void FilterDomains(std::vector<uint64_t>& domains, uint64_t ax, uint64_t bx) const;
 	bool IsValidPermutation(std::vector<uint64_t>& domains);
+	bool IsOutputPermutation(const Permutation& perm);
 	bool Search(const std::vector<uint64_t>& domains);
 	void ResetSearchState();
 };

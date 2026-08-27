@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <unordered_set>
 
 #include <immintrin.h>
 
@@ -15,6 +16,12 @@ SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSear
 		patternCounts[bitCount].resize(1ULL << n);
 		patternSources[bitCount].resize(1ULL << n);
 	}
+}
+
+void SubsumptionSolver::ForceUntangledPermutation(const Network& bNetwork_)
+{
+	forceUntangled = true;
+	bNetwork = bNetwork_;
 }
 
 SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_)
@@ -184,10 +191,69 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
 	return isValid;
 }
 
+bool SubsumptionSolver::IsOutputPermutation(const Permutation& perm)
+{
+	// A permutation is in Pi_C iff, when written in scatter form, it is an output of C
+	// We store permutations in gather form, so invert
+	Permutation output{ perm };
+	output.Invert();
+
+	// Get the binary outputs of the network
+	OutputSet binOutputs = GetOutputs(bNetwork, n, false, false);
+
+	// Compute threshold masks and ensure each is a valid output
+	std::vector<uint64_t> thresholdMasks(n - 1);
+	for (uint8_t threshold = 0; threshold < n - 1; threshold++)
+	{
+		uint64_t mask = 0;
+		for (size_t i = 0; i < n; i++)
+			if (output[i] > threshold)
+				mask |= (1ULL << i);
+
+		if (!binOutputs.Contains(mask))
+			return false;
+
+		thresholdMasks[threshold] = mask;
+	}
+
+	// Search for a subset-chain
+	std::unordered_set<uint64_t> frontier = { (1ULL << n) - 1 };
+	for (uint8_t t = 0; t < n - 1 && !frontier.empty(); t++)
+	{
+		std::unordered_set<uint64_t> next;
+		for (uint64_t s : frontier)
+		{
+			uint64_t bits = s;
+			while (bits)
+			{
+				uint64_t b = bits & (-bits);
+				bits ^= b;
+				uint64_t child = s ^ b;
+				if (bNetwork(child) == thresholdMasks[t])
+					next.insert(child);
+			}
+		}
+		frontier = std::move(next);
+	}
+	return !frontier.empty();
+}
+
 bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 {
 	// Base case: all positions assigned
-	if (!std::ranges::contains(perm, Unassigned)) return true;
+	if (!std::ranges::contains(perm, Unassigned))
+	{
+		if (!forceUntangled) return true;
+
+		// We know that:
+		// perm(a) is subset of b
+		// a is a subset of perm^-1(b)
+		// We must check if perm^-1 is an output permutation
+
+		Permutation invPerm{ perm };
+		invPerm.Invert();
+		return IsOutputPermutation(invPerm);
+	}
 
 	// Check if search limit has been reached
 	if (++numSearches >= maxSearches)
