@@ -24,7 +24,7 @@ PrefixDescriptor& PrefixDescriptor::operator=(PrefixDescriptor&& other) noexcept
 
 void PrefixDescriptor::ComputeSignature(const std::vector<uint64_t>& outputs)
 {
-	signature.Construct(outputs);
+	signature.Construct(outputs, true);
 	isEmpty.store(false, std::memory_order_release);
 	isEmpty.notify_all();
 }

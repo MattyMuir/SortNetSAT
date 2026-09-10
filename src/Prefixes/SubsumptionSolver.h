@@ -1,6 +1,9 @@
 #pragma once
 #include <sortnetutils.h>
 
+#include "NetworkSignature.h"
+#include "DomainRefiner.h"
+
 enum SubsumptionResult
 {
 	DoesntSubsume,
@@ -19,40 +22,40 @@ protected:
 public:
 	SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_ = 0);
 
-	void ForceUntangledPermutation(const Network& bNetwork_);
-
 	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_);
+	size_t GetNumSearches() const;
 
 protected:
 	// === Parameters ===
 	uint8_t n;
 	bool symmetric;
 	size_t maxSearches;
-	bool forceUntangled = false;
-	Network bNetwork;
 	const std::vector<uint64_t>* a, * b;
 
+	// === Domains ===
+	NetworkSignature aSig, bSig;
+	std::vector<uint64_t> initialDomains;				// domains[src] stores a mask of destinations that 'src' can be mapped to
+	DomainRefiner refiner;
+
 	// === Search State ===
-	// domains[src] stores a mask of destination bits that 'src' can be mapped to under permutation
-	std::vector<uint64_t> initialDomains;
-	// Working permutation using the 'gather' convention
-	Permutation perm;
+	Permutation perm;									// Working permutation using the 'gather' convention
 	FastPermutation fastperm;
-	// Counts the number of each pattern, in unary (to avoid overflow)
-	std::vector<std::vector<uint8_t>> patternCounts;
-	// Stores a representative element in b for each pattern
-	std::vector<std::vector<uint64_t>> patternSources;
+	std::vector<std::vector<uint8_t>> patternCounts;	// Counts the number of each pattern, in unary (to avoid overflow)
+	std::vector<std::vector<uint64_t>> patternSources;	// Stores a representative element in b for each pattern
 	size_t numSearches = 0;
 
-	uint8_t PickBranchPosition(const std::vector<uint64_t>& domains);
-	bool SourceUsed(uint8_t src);
-	bool DestUsed(uint8_t dst);
+	bool SourceUsed(uint8_t src) const;
+	bool DestUsed(uint8_t dst) const;
 	void Assign(uint8_t src, uint8_t dst);
 	void Unassign(uint8_t dst);
+
+	uint8_t PickBranchDest(const std::vector<uint64_t>& domains);
 	uint64_t ReverseBits(uint64_t x) const;
 	void FilterDomains(std::vector<uint64_t>& domains, uint64_t ax, uint64_t bx) const;
-	bool IsValidPermutation(std::vector<uint64_t>& domains);
-	bool IsOutputPermutation(const Permutation& perm);
+	uint64_t GetDestMask() const;
+	void BuildLUT(uint64_t dstMask);
+	void ResetLUT(uint64_t dstMask);
+	bool IsValidPermutation(std::vector<uint64_t>& domains, uint64_t dstMask);
 	bool Search(const std::vector<uint64_t>& domains);
 	void ResetSearchState();
 };

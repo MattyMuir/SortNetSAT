@@ -17,8 +17,9 @@
 #include "Prefixes/WindowMinimizer.h"
 #include "Prefixes/IntersectionMaximizer.h"
 
-int main()
+void UnextendableSubsetPruning()
 {
+	/*
 	// === Parameters ===
 	uint8_t n = 18;
 	uint8_t d = 10;
@@ -38,40 +39,67 @@ int main()
 	bool extendable = extender.Extend();
 	std::println();
 	STOP_LOG(t)
-	std::println("{}", extendable ? "SAT" : "UNSAT");
+		std::println("{}", extendable ? "SAT" : "UNSAT");
 	if (extendable) return 0;
 	auto unextendableSet = extender.GetIncludedInputs();
 
 	{
-		std::ofstream file{ "unextendable3.txt" };
+		std::ofstream file{ "unextendable4.txt" };
 		for (uint64_t x : unextendableSet)
 			file << x << '\n';
 	}
 #else
-	std::ifstream file{ "unextendable3.txt" };
+	std::ifstream file{ "unextendable.txt" };
 	std::vector<uint64_t> unextendableSet;
 	std::string line;
 	while (std::getline(file, line))
 		unextendableSet.push_back(std::stoull(line));
 #endif
-	
+
+	NetworkSignature unextendableSig{ n };
+	unextendableSig.Construct(unextendableSet);
+
 
 	// Load all prefixes
 	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
 
 	SubsumptionSolver solver{ n, symmetric };
-	size_t numSubsumed = 0;
+	size_t numSubsumed = 0, numPrechecked = 0, totalSearches = 0, maxSearches = 0;
 	for (size_t prefixIdx = 1; prefixIdx < allPrefixes.size(); prefixIdx++)
 	{
 		const Network& otherPrefix = allPrefixes[prefixIdx];
 		std::vector<uint64_t> otherOutputs = FactoredOutputSet{ otherPrefix, n }.ToVector();
+		NetworkSignature otherSig{ n };
+		otherSig.Construct(otherOutputs);
+
+		if (unextendableSig > otherSig)
+			numPrechecked++;
 
 		solver.ForceUntangledPermutation(otherPrefix);
 		auto result = solver.Solve(unextendableSet, otherOutputs);
 		if (result == DoesSubsume)
 			numSubsumed++;
 
+		size_t numSearches = solver.GetNumSearches();
+		totalSearches += numSearches;
+		maxSearches = std::max(maxSearches, numSearches);
+
 		if (prefixIdx % 100 == 0)
-			std::print("{}/{}       \r", numSubsumed, prefixIdx);
+			std::print("{}/{}  PR: {:.3f}%   Searches:{:.3f} / {}  \r",
+				numSubsumed,
+				prefixIdx, (double)numPrechecked / prefixIdx * 100.0,
+				(double)totalSearches / prefixIdx,
+				maxSearches);
 	}
+	*/
+}
+
+int main()
+{
+	PrefixGenerator generator{ 14, 3, true };
+	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\14_2_sym.txt"));
+
+	TIMER(t);
+	auto allPrefixes = generator.GeneratePrefixes();
+	STOP_LOG(t);
 }

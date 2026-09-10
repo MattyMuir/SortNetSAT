@@ -2,13 +2,14 @@
 
 #include <algorithm>
 #include <bit>
-#include <unordered_set>
+#include <ranges>
 
 #include <immintrin.h>
 
 SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_)
 	: n(n_), symmetric(symmetric_), maxSearches(maxSearches_ ? maxSearches_ : UINT64_MAX),
-	initialDomains(n, (uint64_t)-1), perm(n, Unassigned), fastperm(n), patternCounts(n + 1), patternSources(n + 1)
+	aSig(n), bSig(n), initialDomains(n, (1ULL << n) - 1), refiner(n),
+	perm(n, Unassigned), fastperm(n), patternCounts(n + 1), patternSources(n + 1)
 {
 	// Initialize pattern LUTs
 	for (uint64_t bitCount = 0; bitCount <= n; bitCount++)
@@ -16,12 +17,6 @@ SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSear
 		patternCounts[bitCount].resize(1ULL << n);
 		patternSources[bitCount].resize(1ULL << n);
 	}
-}
-
-void SubsumptionSolver::ForceUntangledPermutation(const Network& bNetwork_)
-{
-	forceUntangled = true;
-	bNetwork = bNetwork_;
 }
 
 SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_)
@@ -33,28 +28,19 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 	a = &a_;
 	b = &b_;
 
-	// Compute column sums
-	std::vector<uint32_t> aColumnSum(n), bColumnSum(n);
-	for (uint64_t ax : *a)
-		for (uint8_t bi = 0; bi < n; bi++)
-			aColumnSum[bi] += (ax >> bi) & 1;
-	for (uint64_t bx : *b)
-		for (uint8_t bi = 0; bi < n; bi++)
-			bColumnSum[bi] += (bx >> bi) & 1;
+	// Compute domains using signatures
+	aSig.Construct(*a, false);
+	bSig.Construct(*b, false);
+	initialDomains = NetworkSignature::GetDomains(aSig, bSig);
 
-	// Compute domains using the column sums
-	for (uint8_t src = 0; src < n; src++)
-	{
+	// Exploit symmetry in domains
+	if (symmetric)
 		for (uint8_t dst = 0; dst < n; dst++)
-		{
-			if (aColumnSum[src] > bColumnSum[dst]
-				|| a->size() - aColumnSum[src] > b->size() - bColumnSum[dst])
-			{
-				initialDomains[src] &= ~(1ULL << dst);
-				if (symmetric) initialDomains[n - 1 - src] &= ~(1ULL << (n - 1 - dst));
-			}
-		}
-	}
+			initialDomains[dst] &= ReverseBits(initialDomains[n - 1 - dst]);
+
+	// Refine initial domains
+	bool validDomains = refiner.Refine(initialDomains);
+	if (!validDomains) return DoesntSubsume;
 
 	// Run the search
 	try
@@ -68,38 +54,17 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 	}
 }
 
-uint8_t SubsumptionSolver::PickBranchPosition(const std::vector<uint64_t>& domains)
+size_t SubsumptionSolver::GetNumSearches() const
 {
-	// Pick the source location with the fewest remaining destinations in its domain
-	uint8_t bestSrc = 0;
-	size_t fewestDest = n + 1;
-	for (uint8_t src = 0; src < n; src++)
-	{
-		if (SourceUsed(src)) continue;
-
-		// Count unused destinations for this src
-		size_t numDest = 0;
-		for (uint8_t dst = 0; dst < n; dst++)
-			if (((domains[src] >> dst) & 1) && !DestUsed(dst))
-				numDest++;
-
-		// Update best
-		if (numDest < fewestDest)
-		{
-			bestSrc = src;
-			fewestDest = numDest;
-		}
-	}
-
-	return bestSrc;
+	return numSearches;
 }
 
-bool SubsumptionSolver::SourceUsed(uint8_t src)
+bool SubsumptionSolver::SourceUsed(uint8_t src) const
 {
 	return std::ranges::contains(perm, src);
 }
 
-bool SubsumptionSolver::DestUsed(uint8_t dst)
+bool SubsumptionSolver::DestUsed(uint8_t dst) const
 {
 	return perm[dst] != Unassigned;
 }
@@ -114,6 +79,32 @@ void SubsumptionSolver::Unassign(uint8_t dst)
 {
 	perm[dst] = Unassigned;
 	if (symmetric) perm[n - 1 - dst] = Unassigned;
+}
+
+uint8_t SubsumptionSolver::PickBranchDest(const std::vector<uint64_t>& domains)
+{
+	// Pick the destination location with the fewest remaining sources in its domain
+	uint8_t bestDst = 0;
+	size_t fewestSrc = n + 1;
+	for (uint8_t dst = 0; dst < n; dst++)
+	{
+		if (DestUsed(dst)) continue;
+
+		// Count unused sources for this dst
+		size_t numSrc = 0;
+		for (uint8_t src = 0; src < n; src++)
+			if (((domains[src] >> dst) & 1) && !SourceUsed(src))
+				numSrc++;
+
+		// Update best
+		if (numSrc < fewestSrc)
+		{
+			bestDst = dst;
+			fewestSrc = numSrc;
+		}
+	}
+
+	return bestDst;
 }
 
 uint64_t SubsumptionSolver::ReverseBits(uint64_t x) const
@@ -139,14 +130,17 @@ void SubsumptionSolver::FilterDomains(std::vector<uint64_t>& domains, uint64_t a
 	}
 }
 
-bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
+uint64_t SubsumptionSolver::GetDestMask() const
 {
-	// Get a mask of all destination bits assigned so far
 	uint64_t dstMask = 0;
 	for (uint8_t i = 0; i < n; i++)
 		if (DestUsed(i))
 			dstMask |= 1ULL << i;
+	return dstMask;
+}
 
+void SubsumptionSolver::BuildLUT(uint64_t dstMask)
+{
 	// Insert elements of b into the LUTs
 	for (uint64_t bx : *b)
 	{
@@ -156,20 +150,28 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
 		patternCount = (patternCount << 1) | 1; // Unary increment to avoid overflow
 		patternSources[bitCount][pattern] = bx;
 	}
+}
 
+void SubsumptionSolver::ResetLUT(uint64_t dstMask)
+{
+	// Reset the LUTs
+	for (uint64_t bx : *b)
+	{
+		uint64_t bitCount = std::popcount(bx);
+		patternCounts[bitCount][_pext_u64(bx, dstMask)] = 0;
+	}
+}
+
+bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains, uint64_t dstMask)
+{
 	// Check if every element of 'a' has a matching pattern
-	bool isValid = true;
 	for (uint64_t ax : *a)
 	{
 		uint64_t bitCount = std::popcount(ax);
 		uint64_t pattern = _pext_u64(fastperm(ax), dstMask);
 		uint8_t patternCount = patternCounts[bitCount][pattern];
 
-		if (!patternCount)
-		{
-			isValid = false;
-			break;
-		}
+		if (!patternCount) return false;
 
 		// If this element in 'a' has a unique remaining element in 'b' that it can map to, filter the domains
 		if (patternCount == 1)
@@ -181,105 +183,71 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains)
 		for (uint8_t dst = 0; dst < n; dst++)
 			domains[dst] &= ReverseBits(domains[n - 1 - dst]);
 
-	// Reset the LUTs
-	for (uint64_t bx : *b)
-	{
-		uint64_t bitCount = std::popcount(bx);
-		patternCounts[bitCount][_pext_u64(bx, dstMask)] = 0;
-	}
-
-	return isValid;
-}
-
-bool SubsumptionSolver::IsOutputPermutation(const Permutation& perm)
-{
-	// A permutation is in Pi_C iff, when written in scatter form, it is an output of C
-	// We store permutations in gather form, so invert
-	Permutation output{ perm };
-	output.Invert();
-
-	// Get the binary outputs of the network
-	OutputSet binOutputs = GetOutputs(bNetwork, n, false, false);
-
-	// Compute threshold masks and ensure each is a valid output
-	std::vector<uint64_t> thresholdMasks(n - 1);
-	for (uint8_t threshold = 0; threshold < n - 1; threshold++)
-	{
-		uint64_t mask = 0;
-		for (size_t i = 0; i < n; i++)
-			if (output[i] > threshold)
-				mask |= (1ULL << i);
-
-		if (!binOutputs.Contains(mask))
-			return false;
-
-		thresholdMasks[threshold] = mask;
-	}
-
-	// Search for a subset-chain
-	std::unordered_set<uint64_t> frontier = { (1ULL << n) - 1 };
-	for (uint8_t t = 0; t < n - 1 && !frontier.empty(); t++)
-	{
-		std::unordered_set<uint64_t> next;
-		for (uint64_t s : frontier)
-		{
-			uint64_t bits = s;
-			while (bits)
-			{
-				uint64_t b = bits & (-bits);
-				bits ^= b;
-				uint64_t child = s ^ b;
-				if (bNetwork(child) == thresholdMasks[t])
-					next.insert(child);
-			}
-		}
-		frontier = std::move(next);
-	}
-	return !frontier.empty();
+	// Refine domains
+	return refiner.Refine(domains);
 }
 
 bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 {
-	// Base case: all positions assigned
-	if (!std::ranges::contains(perm, Unassigned))
-	{
-		if (!forceUntangled) return true;
-
-		// We know that:
-		// perm(a) is subset of b
-		// a is a subset of perm^-1(b)
-		// We must check if perm^-1 is an output permutation
-
-		Permutation invPerm{ perm };
-		invPerm.Invert();
-		return IsOutputPermutation(invPerm);
-	}
+	// Base case: all destinations assigned
+	if (!std::ranges::contains(perm, Unassigned)) return true;
 
 	// Check if search limit has been reached
 	if (++numSearches >= maxSearches)
 		throw SearchLimitReached{};
 
-	uint8_t src = PickBranchPosition(domains);
+	// Choose a branching destination
+	uint8_t dst = PickBranchDest(domains);
 
-	for (uint8_t dst = 0; dst < n; dst++)
+	// Build the LUT
+	uint64_t newDstMask = 1ULL << dst;
+	if (symmetric) newDstMask |= 1ULL << (n - 1 - dst);
+	uint64_t dstMask = GetDestMask() | newDstMask;
+	BuildLUT(dstMask);
+
+	// Determine which choices of src produce valid partial permutations
+	std::vector<uint8_t> validSrcs;
+	std::vector<std::vector<uint64_t>> allNewDomains;
+	for (uint8_t src = 0; src < n; src++)
 	{
 		if (~domains[src] & (1ULL << dst)) continue;
-		if (DestUsed(dst)) continue;
+		if (SourceUsed(src)) continue;
 
 		// Make the assignment
 		Assign(src, dst);
 		fastperm.Assign(perm);
 
-		// Check if the assignment is valid
+		// Prepare new domains for this assignment
 		std::vector<uint64_t> newDomains{ domains };
-		bool isValid = IsValidPermutation(newDomains);
-		if (!isValid) { Unassign(dst); continue; }
+		for (uint8_t otherSrc = 0; otherSrc < n; otherSrc++)
+			newDomains[otherSrc] &= ~newDstMask;
+		newDomains[src] = 1ULL << dst;
+		if (symmetric) newDomains[n - 1 - src] = 1ULL << (n - 1 - dst);
 
-		// Recurse
-		if (Search(newDomains))
+		// Check if the assignment is valid
+		if (IsValidPermutation(newDomains, dstMask))
+		{
+			validSrcs.push_back(src);
+			allNewDomains.emplace_back(std::move(newDomains));
+		}
+
+		// Undo the assignment
+		Unassign(dst);
+	}
+
+	// Reset the LUT
+	ResetLUT(dstMask);
+
+	// Recurse into valid assignments
+	for (size_t assignIdx = 0; assignIdx < validSrcs.size(); assignIdx++)
+	{
+		// Make the assignment
+		Assign(validSrcs[assignIdx], dst);
+
+		if (Search(allNewDomains[assignIdx]))
 			return true;
 
-		// This assignment failed, undo it
+		// Undo the assignment
 		Unassign(dst);
 	}
 
@@ -288,7 +256,7 @@ bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 
 void SubsumptionSolver::ResetSearchState()
 {
-	std::fill(initialDomains.begin(), initialDomains.end(), (uint64_t)-1);
+	std::fill(initialDomains.begin(), initialDomains.end(), (1ULL << n) - 1);
 	std::fill(perm.begin(), perm.end(), Unassigned);
 	numSearches = 0;
 }
