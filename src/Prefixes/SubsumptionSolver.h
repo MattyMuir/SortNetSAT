@@ -21,9 +21,11 @@ protected:
 
 public:
 	SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_ = 0);
+	void ForceUntangledPermutation(const Network& bNetwork_);
 
 	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_);
 	size_t GetNumSearches() const;
+	Permutation GetPerm() const;
 
 protected:
 	// === Parameters ===
@@ -31,6 +33,8 @@ protected:
 	bool symmetric;
 	size_t maxSearches;
 	const std::vector<uint64_t>* a, * b;
+	bool forceUntangled = false;
+	Network bNetwork{};
 
 	// === Domains ===
 	NetworkSignature aSig, bSig;

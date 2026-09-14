@@ -16,90 +16,117 @@
 #include "BulkChecker.h"
 #include "Prefixes/WindowMinimizer.h"
 #include "Prefixes/IntersectionMaximizer.h"
+#include "minisatutil.h"
+#include "UnextendableSetBuilder.h"
 
-void UnextendableSubsetPruning()
+std::vector<uint64_t> GetUnextendableSubset()
 {
-	/*
 	// === Parameters ===
 	uint8_t n = 18;
 	uint8_t d = 10;
 	bool symmetric = true;
-	Network prefix = ParseNetwork(R"(
-		[(0,13),(4,17),(1,2),(15,16),(3,14),(5,6),(11,12),(7,10),(8,9)]
-		[(0,11),(6,17),(1,16),(2,9),(8,15),(3,10),(7,14),(4,5),(12,13)]
-		[(0,4),(13,17),(1,8),(9,16),(2,15),(3,7),(10,14),(5,12),(6,11)]
-		)");
+	Network prefix = ParseNetwork("[(0,13),(4,17),(1,2),(15,16),(3,14),(5,6),(11,12),(7,10),(8,9),(0,11),(6,17),(1,16),(2,7),(10,15),(3,8),(9,14),(4,5),(12,13),(0,4),(13,17),(1,2),(15,16),(3,7),(10,14),(5,12),(6,11),(8,9)]");
 	// ==================
 
-#if 0
-	// Find an unextendable subset of 'prefix'
+	// Run the IncrementalExtender
 	IncrementalExtender extender{ n, d, symmetric, prefix, true };
 	extender.SetParameters(1);
 	TIMER(t);
 	bool extendable = extender.Extend();
 	std::println();
-	STOP_LOG(t)
-		std::println("{}", extendable ? "SAT" : "UNSAT");
-	if (extendable) return 0;
-	auto unextendableSet = extender.GetIncludedInputs();
+	STOP_LOG(t);
 
-	{
-		std::ofstream file{ "unextendable4.txt" };
-		for (uint64_t x : unextendableSet)
-			file << x << '\n';
-	}
-#else
-	std::ifstream file{ "unextendable.txt" };
-	std::vector<uint64_t> unextendableSet;
+	// Log result
+	std::println("{}", extendable ? "SAT" : "UNSAT");
+	if (extendable) return {};
+
+	return extender.GetIncludedInputs();
+}
+
+std::vector<uint64_t> LoadOutputSet(const std::string& filepath)
+{
+	std::ifstream file{ filepath };
+
 	std::string line;
+	std::vector<uint64_t> outputs;
 	while (std::getline(file, line))
-		unextendableSet.push_back(std::stoull(line));
-#endif
+		outputs.push_back(std::stoull(line));
 
-	NetworkSignature unextendableSig{ n };
-	unextendableSig.Construct(unextendableSet);
+	return outputs;
+}
 
+void SaveOutputSet(const std::string& filepath, const std::vector<uint64_t>& set)
+{
+	std::ofstream file{ filepath };
+	for (uint64_t x : set)
+		file << x << '\n';
+}
+
+void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
+{
+	// === Parameters ===
+	uint8_t n = 18;
+	bool symmetric = true;
+	// ==================
 
 	// Load all prefixes
 	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
 
+	TIMER(t);
 	SubsumptionSolver solver{ n, symmetric };
-	size_t numSubsumed = 0, numPrechecked = 0, totalSearches = 0, maxSearches = 0;
+	size_t numSubsumed = 0;
 	for (size_t prefixIdx = 1; prefixIdx < allPrefixes.size(); prefixIdx++)
 	{
 		const Network& otherPrefix = allPrefixes[prefixIdx];
 		std::vector<uint64_t> otherOutputs = FactoredOutputSet{ otherPrefix, n }.ToVector();
-		NetworkSignature otherSig{ n };
-		otherSig.Construct(otherOutputs);
-
-		if (unextendableSig > otherSig)
-			numPrechecked++;
 
 		solver.ForceUntangledPermutation(otherPrefix);
 		auto result = solver.Solve(unextendableSet, otherOutputs);
 		if (result == DoesSubsume)
 			numSubsumed++;
 
-		size_t numSearches = solver.GetNumSearches();
-		totalSearches += numSearches;
-		maxSearches = std::max(maxSearches, numSearches);
-
+		// Log progress
 		if (prefixIdx % 100 == 0)
-			std::print("{}/{}  PR: {:.3f}%   Searches:{:.3f} / {}  \r",
-				numSubsumed,
-				prefixIdx, (double)numPrechecked / prefixIdx * 100.0,
-				(double)totalSearches / prefixIdx,
-				maxSearches);
+			std::print("{}/{}   \r", numSubsumed, prefixIdx);
 	}
-	*/
+	std::println();
+	STOP_LOG(t);
+}
+
+bool IsSubset(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b)
+{
+	std::unordered_set<uint64_t> bSet{ b.begin(), b.end() };
+	for (uint64_t ax : a)
+		if (!bSet.contains(ax))
+			return false;
+	return true;
+}
+
+void PrintClusterSizes(const std::vector<uint64_t>& a, uint8_t n)
+{
+	std::vector<size_t> clusterSizes(n + 1);
+	for (uint64_t x : a)
+	{
+		if (std::popcount(x) == 6)
+			std::println("{}", x);
+		clusterSizes[std::popcount(x)]++;
+	}
+		
+
+	for (uint64_t cluster = 0; cluster <= n; cluster++)
+		std::println("{:<2}: {}", cluster, clusterSizes[cluster]);
 }
 
 int main()
 {
-	PrefixGenerator generator{ 14, 3, true };
-	generator.LoadPrevious(2, ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\14_2_sym.txt"));
+	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
+	std::mt19937_64 gen{ 1 };
+	std::ranges::shuffle(allPrefixes, gen);
+	allPrefixes.resize(5000);
 
-	TIMER(t);
-	auto allPrefixes = generator.GeneratePrefixes();
-	STOP_LOG(t);
+	UnextendableSetBuilder builder{ 18, 7, true, allPrefixes };
+	TIMER(build);
+	auto unextendable = builder.Build();
+	STOP_LOG(build);
+	SaveOutputSet("seed1.txt", unextendable);
 }

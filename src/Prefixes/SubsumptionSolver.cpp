@@ -19,6 +19,12 @@ SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSear
 	}
 }
 
+void SubsumptionSolver::ForceUntangledPermutation(const Network& bNetwork_)
+{
+	forceUntangled = true;
+	bNetwork = bNetwork_;
+}
+
 SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_)
 {
 	// Reset all state
@@ -57,6 +63,11 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 size_t SubsumptionSolver::GetNumSearches() const
 {
 	return numSearches;
+}
+
+Permutation SubsumptionSolver::GetPerm() const
+{
+	return perm;
 }
 
 bool SubsumptionSolver::SourceUsed(uint8_t src) const
@@ -190,7 +201,18 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains, uint6
 bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 {
 	// Base case: all destinations assigned
-	if (!std::ranges::contains(perm, Unassigned)) return true;
+	if (!std::ranges::contains(perm, Unassigned))
+	{
+		if (!forceUntangled) return true;
+
+		// We know
+		// perm(a)	\subset b
+		// a		\subset perm^-1(b)
+		// We must check if perm^-1 is an output permutation of b
+		// This is the case iff, when written in scatter form, perm^-1 is an output of b
+		// We use gather form, the scatter form of perm^-1 is just perm
+		return bNetwork.GetInput(perm).has_value();
+	}
 
 	// Check if search limit has been reached
 	if (++numSearches >= maxSearches)

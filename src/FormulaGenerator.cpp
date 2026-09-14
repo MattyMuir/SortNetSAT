@@ -314,6 +314,8 @@ void FormulaGenerator::AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j)
 
 void FormulaGenerator::AddInput(uint64_t input)
 {
+	if (IsSorted(n, input)) return;
+
 	uint64_t leadingZeros = LeadingZeros(input);
 	uint64_t tailingOnes = TailingOnes(input);
 	uint64_t numZeros = n - std::popcount(input);

@@ -3,6 +3,7 @@
 #include <print>
 #include <algorithm>
 #include <ranges>
+#include <random>
 
 #include "Prefixes/prefixes.h"
 
@@ -117,11 +118,27 @@ uint64_t IncrementalExtender::CountInversions(uint64_t output) const
 
 std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<FailingInput>& failing) const
 {
+#if 0
+	std::vector<size_t> newTestors;
+	for (auto [failingIdx, failingOutput] : failing)
+		newTestors.push_back(failingIdx);
+
+	thread_local std::mt19937_64 gen{ std::random_device{}() };
+	std::shuffle(newTestors.begin(), newTestors.end(), gen);
+
+	if (newTestors.size() > maxAddNum)
+		newTestors.resize(maxAddNum);
+
+	return newTestors;
+#else
+	// TODO: Better inversion count, not just adjacent inversions
+
 	struct InputCost
 	{
-		//uint64_t windowWidth, similarity, nonInverted;
-		uint64_t windowWidth, unsimilarity, nonInverted;
+		uint64_t windowWidth, similarity, nonInverted;
+		//uint64_t windowWidth, unsimilarity, nonInverted;
 		//uint64_t unsimilarity, windowWidth, nonInverted;
+		//uint64_t windowWidth, random;
 		auto operator<=>(const InputCost& other) const = default;
 	};
 
@@ -129,14 +146,14 @@ std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<Fail
 	std::vector<std::pair<size_t, InputCost>> scoredFailing;
 	for (auto [failingIdx, failingOutput] : failing)
 	{
+		// Compute cost
 		uint64_t failingInput = excludedInputs[failingIdx];
 		uint64_t windowWidth = WindowWidth(n, failingInput);
-		//uint64_t similarity = ComputeSimilarity(failingInput);
-		uint64_t unsimilarity = UINT64_MAX - ComputeSimilarity(failingInput);
+		uint64_t similarity = ComputeSimilarity(failingInput);
 		uint64_t nonInverted = n - CountInversions(failingOutput);
-		InputCost cost{ windowWidth, unsimilarity, nonInverted };
+		InputCost cost{ windowWidth, similarity, nonInverted };
 
-		//if (includedInputs.size() % 10 == 0) std::swap(cost.windowWidth, cost.similarity);
+		// Add to scored vector
 		scoredFailing.emplace_back(failingIdx, cost);
 	}
 
@@ -148,9 +165,8 @@ std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<Fail
 	for (auto [failingIdx, cost] : scoredFailing | std::views::take(maxAddNum))
 		newTestors.push_back(failingIdx);
 
-	// Sort the indices (necessary for removal)
-	std::sort(newTestors.begin(), newTestors.end());
 	return newTestors;
+#endif
 }
 
 void IncrementalExtender::IncludeNewInputs(const std::vector<size_t>& newTestors)
@@ -173,9 +189,13 @@ void IncrementalExtender::IncludeNewInputs(const std::vector<size_t>& newTestors
 	for (size_t i = numClausesBefore; i < allClauses.size(); i++)
 		solver.addClause(ConvertClause(allClauses[i]));
 
-	// Include the new inputs and remove from excludedInputs
+	// Include the new inputs
 	for (size_t i : newTestors)
 		includedInputs.push_back(excludedInputs[i]);
-	for (size_t i : newTestors | std::views::reverse)
+
+	// Remove from excluded inputs
+	std::vector<size_t> deleteList{ newTestors };
+	std::ranges::sort(deleteList);
+	for (size_t i : deleteList | std::views::reverse)
 		excludedInputs.erase(excludedInputs.begin() + i);
 }
