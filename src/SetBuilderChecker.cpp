@@ -69,6 +69,7 @@ void SetBuilderChecker::CheckWorker()
 		double satTime = builder.GetTotalSATTime();
 		double scoreTime = builder.GetTotalScoreTime();
 		std::println("\nFound unextendable: |X| = {}   SAT/Score: {:.2f}/{:.2f}", unextendable.size(), satTime, scoreTime);
+		std::cout.flush();
 
 		SubsumptionSolver solver{ n, symmetric };
 		size_t numSubsumed = 0;
@@ -90,6 +91,7 @@ void SetBuilderChecker::Logger()
 	for (;;)
 	{
 		std::print("Remaining: {}     \r", numRemaining.load(std::memory_order_relaxed));
-		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
+		std::cout.flush();
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 500 });
 	}
 }
