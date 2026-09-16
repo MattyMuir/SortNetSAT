@@ -5,6 +5,7 @@
 #include <random>
 #include <numeric>
 #include <thread>
+#include <algorithm>
 
 #include "Prefixes/prefixes.h"
 #include "UnextendableSetBuilder.h"
@@ -43,8 +44,8 @@ std::vector<Network> SetBuilderChecker::GetRandomSubset(size_t maxSize) const
 	// Produce a list of all prefix indices in a random order
 	thread_local std::mt19937_64 gen{ std::random_device{}() };
 	std::vector<size_t> idxs(globalPrefixes.size());
-	std::ranges::iota(idxs, 0);
-	std::ranges::shuffle(idxs, gen);
+	std::iota(idxs.begin(), idxs.end(), 0);
+	std::shuffle(idxs.begin(), idxs.end(), gen);
 
 	// Select the first 'maxSize' prefixes which are not already unextendable
 	std::vector<Network> prefixes;

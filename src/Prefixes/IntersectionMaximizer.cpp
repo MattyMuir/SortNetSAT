@@ -2,6 +2,7 @@
 
 #include <numeric>
 #include <print>
+#include <algorithm>
 
 IntersectionMaximizer* poop;
 
@@ -16,7 +17,7 @@ Permutation IntersectionMaximizer::Optimize(const std::vector<uint64_t>& a, cons
 	InitializePopulation(a, populationSize);
 
 	std::vector<size_t> idxs(populationSize);
-	std::ranges::iota(idxs, 0);
+	std::iota(idxs.begin(), idxs.end(), 0);
 	for (size_t run = 0; run < runs; run++)
 	{
 		// Sort population by overlap
@@ -133,8 +134,9 @@ void IntersectionMaximizer::InitializePopulation(const std::vector<uint64_t>& a,
 	allOverlaps.resize(populationSize);
 
 	// Insert initial a into the population
-	std::ranges::copy(a, GetA(0).begin());
-	std::ranges::iota(GetPerm(0), 0);
+	std::copy(a.begin(), a.end(), GetA(0).begin());
+	auto perm = GetPerm(0);
+	std::iota(perm.begin(), perm.end(), 0);
 	allOverlaps[0] = Overlap(a);
 
 	for (size_t i = 1; i < populationSize; i++)

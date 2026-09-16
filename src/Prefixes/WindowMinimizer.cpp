@@ -2,6 +2,7 @@
 
 #include <numeric>
 #include <print>
+#include <algorithm>
 
 #include "prefixes.h"
 
@@ -15,7 +16,7 @@ Network WindowMinimizer::Optimize(const Network& initialPrefix_, size_t runs, si
 	InitializePopulation(populationSize);
 
 	std::vector<size_t> idxs(populationSize);
-	std::ranges::iota(idxs, 0);
+	std::iota(idxs.begin(), idxs.end(), 0);
 	for (size_t run = 0; run < runs; run++)
 	{
 		// Sort population by window width
@@ -63,7 +64,8 @@ void WindowMinimizer::InitializePopulation(size_t populationSize)
 
 	// Insert the initial outputs into the population
 	std::ranges::copy(initialOutputs, GetOutputs(0).begin());
-	std::ranges::iota(GetPerm(0), 0);
+	auto perm = GetPerm(0);
+	std::iota(perm.begin(), perm.end(), 0);
 	allWindowWidths[0] = WindowWidth(n, initialOutputs, symmetric);
 
 	for (size_t i = 1; i < populationSize; i++)

@@ -120,6 +120,6 @@ void PrintClusterSizes(const std::vector<uint64_t>& a, uint8_t n)
 
 int main()
 {	
-	SetBuilderChecker checker{ 18, 7, true, "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt" };
+	SetBuilderChecker checker{ 18, 7, true, "./prefixes/18_3_sym.txt" };
 	checker.CheckAll();
 }
