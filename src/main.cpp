@@ -18,6 +18,7 @@
 #include "Prefixes/IntersectionMaximizer.h"
 #include "minisatutil.h"
 #include "UnextendableSetBuilder.h"
+#include "SetBuilderChecker.h"
 
 std::vector<uint64_t> GetUnextendableSubset()
 {
@@ -118,15 +119,7 @@ void PrintClusterSizes(const std::vector<uint64_t>& a, uint8_t n)
 }
 
 int main()
-{
-	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
-	std::mt19937_64 gen{ 1 };
-	std::ranges::shuffle(allPrefixes, gen);
-	allPrefixes.resize(5000);
-
-	UnextendableSetBuilder builder{ 18, 7, true, allPrefixes };
-	TIMER(build);
-	auto unextendable = builder.Build();
-	STOP_LOG(build);
-	SaveOutputSet("seed1.txt", unextendable);
+{	
+	SetBuilderChecker checker{ 18, 7, true, "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt" };
+	checker.CheckAll();
 }

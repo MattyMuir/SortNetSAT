@@ -38,14 +38,17 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 		// Solve the CNF formula
 		if (!IsSAT())
 		{
-			std::println("UNSAT: |X| = {} solve took {}s", X.size(), satTime);
+			//std::println("UNSAT: |X| = {} solve took {}s", X.size(), satTime);
 			return X;
 		}
 
 		// Score every element for inclusion
 		std::vector<size_t> scores(1ULL << n, 0);
+		Timer timer;
 		size_t numSubsumed = ScoreElements(scores, lastAdded);
-		std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, satTime);
+		timer.Stop();
+		totalScoreTime += timer.GetSeconds();
+		//std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, satTime);
 
 		// Choose the highest scoring unsorted element
 		uint64_t newInput = ChooseNewInput(scores);
@@ -58,13 +61,24 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 	return X;
 }
 
+double UnextendableSetBuilder::GetTotalSATTime() const
+{
+	return totalSatTime;
+}
+
+double UnextendableSetBuilder::GetTotalScoreTime() const
+{
+	return totalScoreTime;
+}
+
 bool UnextendableSetBuilder::IsSAT()
 {
 	Minisat::vec<Minisat::Lit> dummy;
 	Timer timer;
 	Minisat::lbool ret = satSolver.solveLimited(dummy);
 	timer.Stop();
-	satTime = timer.GetSeconds();
+	lastSatTime = timer.GetSeconds();
+	totalSatTime += lastSatTime;
 
 	return ret == Minisat::l_True;
 }
@@ -114,10 +128,26 @@ Network UnextendableSetBuilder::ReconstructPostfix() const
 	return generator.ParseAssignment(assignment);
 }
 
+static inline uint64_t NumInversions(uint64_t x, uint8_t n)
+{
+	uint64_t zeroMask = ~x & ((1ULL << n) - 1);
+	uint64_t popcount = std::popcount(x);
+	uint64_t inversions = 0;
+	for (uint8_t _ = 0; _ < popcount; _++)
+	{
+		uint8_t i = std::countr_zero(x);
+		x &= x - 1;
+		inversions += std::popcount(zeroMask >> (i + 1));
+	}
+
+	return inversions;
+}
+
 uint64_t UnextendableSetBuilder::ChooseNewInput(const std::vector<size_t>& scores) const
 {
 	Network postfix = ReconstructPostfix();
 
+#if 1
 	uint64_t bestElement;
 	size_t bestScore = 0;
 	for (uint64_t x = 0; x < (1ULL << n); x++)
@@ -130,6 +160,19 @@ uint64_t UnextendableSetBuilder::ChooseNewInput(const std::vector<size_t>& score
 	}
 
 	return bestElement;
+#else
+	size_t bestScore = 0;
+	for (uint64_t x = 0; x < (1ULL << n); x++)
+		if (scores[x] > bestScore && !IsSorted(n, postfix(x)))
+			bestScore = scores[x];
+
+	std::vector<uint64_t> candidates;
+	for (uint64_t x = 0; x < (1ULL << n); x++)
+		if ((double)scores[x] / bestScore > 0.9 && !IsSorted(n, postfix(x)))
+			candidates.push_back(x);
+
+	return std::ranges::min(candidates, {}, [this](uint64_t x) { return NumInversions(x, n); });
+#endif
 }
 
 void UnextendableSetBuilder::AddNewInput(uint64_t x)

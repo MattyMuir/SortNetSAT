@@ -12,6 +12,8 @@ public:
 	UnextendableSetBuilder(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes_);
 
 	std::vector<uint64_t> Build();
+	double GetTotalSATTime() const;
+	double GetTotalScoreTime() const;
 
 protected:
 	// Parameters
@@ -24,7 +26,7 @@ protected:
 	std::vector<bool> subsumed;
 	std::vector<Permutation> witnessPerms;
 	FormulaGenerator generator;
-	double satTime;
+	double lastSatTime, totalSatTime = 0.0, totalScoreTime = 0.0;
 	Minisat::Solver satSolver;
 	SubsumptionSolver subSolver;
 	std::vector<uint64_t> X;
