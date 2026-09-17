@@ -35,6 +35,6 @@ protected:
 	bool SubsumedTrivially(size_t prefixIdx, uint64_t lastAdded);
 	size_t ScoreElements(std::vector<size_t>& scores, std::optional<uint64_t> lastAdded);
 	Network ReconstructPostfix() const;
-	uint64_t ChooseNewInput(const std::vector<size_t>& scores) const;
+	std::optional<uint64_t> ChooseNewInput(const std::vector<size_t>& scores) const;
 	void AddNewInput(uint64_t x);
 };

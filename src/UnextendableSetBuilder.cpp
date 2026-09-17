@@ -50,12 +50,15 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 		totalScoreTime += timer.GetSeconds();
 		//std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, satTime);
 
+		if (!numSubsumed) return {};
+
 		// Choose the highest scoring unsorted element
-		uint64_t newInput = ChooseNewInput(scores);
+		auto newInput = ChooseNewInput(scores);
+		if (!newInput) return {};
 
 		// Add element to X and the formula
 		lastAdded = newInput;
-		AddNewInput(newInput);
+		AddNewInput(*newInput);
 	}
 
 	return X;
@@ -143,12 +146,12 @@ static inline uint64_t NumInversions(uint64_t x, uint8_t n)
 	return inversions;
 }
 
-uint64_t UnextendableSetBuilder::ChooseNewInput(const std::vector<size_t>& scores) const
+std::optional<uint64_t> UnextendableSetBuilder::ChooseNewInput(const std::vector<size_t>& scores) const
 {
 	Network postfix = ReconstructPostfix();
 
 #if 1
-	uint64_t bestElement;
+	std::optional<uint64_t> bestElement = std::nullopt;
 	size_t bestScore = 0;
 	for (uint64_t x = 0; x < (1ULL << n); x++)
 	{
