@@ -38,7 +38,7 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 		// Solve the CNF formula
 		if (!IsSAT())
 		{
-			//std::println("UNSAT: |X| = {} solve took {}s", X.size(), satTime);
+			std::println("UNSAT: |X| = {} solve took {}s", X.size(), lastSatTime);
 			return X;
 		}
 
@@ -48,7 +48,7 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 		size_t numSubsumed = ScoreElements(scores, lastAdded);
 		timer.Stop();
 		totalScoreTime += timer.GetSeconds();
-		//std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, satTime);
+		std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, lastSatTime);
 
 		if (!numSubsumed) return {};
 
@@ -131,26 +131,10 @@ Network UnextendableSetBuilder::ReconstructPostfix() const
 	return generator.ParseAssignment(assignment);
 }
 
-static inline uint64_t NumInversions(uint64_t x, uint8_t n)
-{
-	uint64_t zeroMask = ~x & ((1ULL << n) - 1);
-	uint64_t popcount = std::popcount(x);
-	uint64_t inversions = 0;
-	for (uint8_t _ = 0; _ < popcount; _++)
-	{
-		uint8_t i = std::countr_zero(x);
-		x &= x - 1;
-		inversions += std::popcount(zeroMask >> (i + 1));
-	}
-
-	return inversions;
-}
-
 std::optional<uint64_t> UnextendableSetBuilder::ChooseNewInput(const std::vector<size_t>& scores) const
 {
 	Network postfix = ReconstructPostfix();
 
-#if 1
 	std::optional<uint64_t> bestElement = std::nullopt;
 	size_t bestScore = 0;
 	for (uint64_t x = 0; x < (1ULL << n); x++)
@@ -163,19 +147,6 @@ std::optional<uint64_t> UnextendableSetBuilder::ChooseNewInput(const std::vector
 	}
 
 	return bestElement;
-#else
-	size_t bestScore = 0;
-	for (uint64_t x = 0; x < (1ULL << n); x++)
-		if (scores[x] > bestScore && !IsSorted(n, postfix(x)))
-			bestScore = scores[x];
-
-	std::vector<uint64_t> candidates;
-	for (uint64_t x = 0; x < (1ULL << n); x++)
-		if ((double)scores[x] / bestScore > 0.9 && !IsSorted(n, postfix(x)))
-			candidates.push_back(x);
-
-	return std::ranges::min(candidates, {}, [this](uint64_t x) { return NumInversions(x, n); });
-#endif
 }
 
 void UnextendableSetBuilder::AddNewInput(uint64_t x)

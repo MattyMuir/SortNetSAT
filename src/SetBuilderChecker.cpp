@@ -92,8 +92,7 @@ void SetBuilderChecker::CheckWorker()
 			std::vector<uint64_t> otherOutputs = FactoredOutputSet{ otherPrefix, n }.ToVector();
 
 			// Check for subsumption
-			solver.ForceUntangledPermutation(otherPrefix);
-			auto result = solver.Solve(unextendableSet, otherOutputs);
+			auto result = solver.Solve(unextendableSet, otherOutputs, 1, otherPrefix);
 			if (result == DoesSubsume)
 				MarkUnextendable(prefixIdx);
 		}

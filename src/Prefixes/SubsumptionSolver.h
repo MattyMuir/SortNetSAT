@@ -18,14 +18,16 @@ protected:
 	static constexpr uint8_t Unassigned = 63;
 
 	class SearchLimitReached {};
+	class SolutionLimitReached {};
 
 public:
 	SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSearches_ = 0);
-	void ForceUntangledPermutation(const Network& bNetwork_);
 
-	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_);
+	SubsumptionResult Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_,
+		size_t maxSolutions_ = 1, std::optional<Network> bNetwork_ = std::nullopt);
 	size_t GetNumSearches() const;
 	Permutation GetPerm() const;
+	std::pair<bool, std::vector<Permutation>> GetPerms() const;
 
 protected:
 	// === Parameters ===
@@ -33,8 +35,8 @@ protected:
 	bool symmetric;
 	size_t maxSearches;
 	const std::vector<uint64_t>* a, * b;
-	bool forceUntangled = false;
-	Network bNetwork{};
+	size_t maxSolutions;
+	std::optional<Network> bNetwork;
 
 	// === Domains ===
 	NetworkSignature aSig, bSig;
@@ -47,6 +49,8 @@ protected:
 	std::vector<std::vector<uint8_t>> patternCounts;	// Counts the number of each pattern, in unary (to avoid overflow)
 	std::vector<std::vector<uint64_t>> patternSources;	// Stores a representative element in b for each pattern
 	size_t numSearches = 0;
+	bool isComplete;									// Specifies whether subPerms contains every possible valid perm
+	std::vector<Permutation> subPerms;					// List of permutations which result in a valid subsumption
 
 	bool SourceUsed(uint8_t src) const;
 	bool DestUsed(uint8_t dst) const;
@@ -60,6 +64,6 @@ protected:
 	void BuildLUT(uint64_t dstMask);
 	void ResetLUT(uint64_t dstMask);
 	bool IsValidPermutation(std::vector<uint64_t>& domains, uint64_t dstMask);
-	bool Search(const std::vector<uint64_t>& domains);
+	void Search(const std::vector<uint64_t>& domains);
 	void ResetSearchState();
 };

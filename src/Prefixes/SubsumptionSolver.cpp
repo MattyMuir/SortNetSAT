@@ -19,13 +19,7 @@ SubsumptionSolver::SubsumptionSolver(uint8_t n_, bool symmetric_, size_t maxSear
 	}
 }
 
-void SubsumptionSolver::ForceUntangledPermutation(const Network& bNetwork_)
-{
-	forceUntangled = true;
-	bNetwork = bNetwork_;
-}
-
-SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_)
+SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, const std::vector<uint64_t>& b_, size_t maxSolutions_, std::optional<Network> bNetwork_)
 {
 	// Reset all state
 	ResetSearchState();
@@ -33,6 +27,8 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 	// Assign parameters
 	a = &a_;
 	b = &b_;
+	maxSolutions = maxSolutions_;
+	bNetwork = bNetwork_;
 
 	// Compute domains using signatures
 	aSig.Construct(*a, false);
@@ -51,12 +47,17 @@ SubsumptionResult SubsumptionSolver::Solve(const std::vector<uint64_t>& a_, cons
 	// Run the search
 	try
 	{
-		bool result = Search(initialDomains);
-		return result ? DoesSubsume : DoesntSubsume;
+		Search(initialDomains);
+		return subPerms.empty() ? DoesntSubsume : DoesSubsume;
 	}
 	catch (const SearchLimitReached&)
 	{
 		return Unknown;
+	}
+	catch (const SolutionLimitReached&)
+	{
+		isComplete = false;
+		return subPerms.empty() ? DoesntSubsume : DoesSubsume;
 	}
 }
 
@@ -67,7 +68,12 @@ size_t SubsumptionSolver::GetNumSearches() const
 
 Permutation SubsumptionSolver::GetPerm() const
 {
-	return perm;
+	return subPerms[0];
+}
+
+std::pair<bool, std::vector<Permutation>> SubsumptionSolver::GetPerms() const
+{
+	return { isComplete, subPerms };
 }
 
 bool SubsumptionSolver::SourceUsed(uint8_t src) const
@@ -198,20 +204,22 @@ bool SubsumptionSolver::IsValidPermutation(std::vector<uint64_t>& domains, uint6
 	return refiner.Refine(domains);
 }
 
-bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
+void SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 {
 	// Base case: all destinations assigned
 	if (!std::ranges::contains(perm, Unassigned))
 	{
-		if (!forceUntangled) return true;
-
 		// We know
 		// perm(a)	\subset b
 		// a		\subset perm^-1(b)
 		// We must check if perm^-1 is an output permutation of b
 		// This is the case iff, when written in scatter form, perm^-1 is an output of b
 		// We use gather form, the scatter form of perm^-1 is just perm
-		return bNetwork.GetInput(perm).has_value();
+		if (bNetwork && !bNetwork->GetInput(perm)) return;
+
+		subPerms.push_back(perm);
+		if (maxSolutions && subPerms.size() >= maxSolutions) throw SolutionLimitReached{};
+		return;
 	}
 
 	// Check if search limit has been reached
@@ -266,14 +274,12 @@ bool SubsumptionSolver::Search(const std::vector<uint64_t>& domains)
 		// Make the assignment
 		Assign(validSrcs[assignIdx], dst);
 
-		if (Search(allNewDomains[assignIdx]))
-			return true;
+		// Search
+		Search(allNewDomains[assignIdx]);
 
 		// Undo the assignment
 		Unassign(dst);
 	}
-
-	return false;
 }
 
 void SubsumptionSolver::ResetSearchState()
@@ -281,4 +287,6 @@ void SubsumptionSolver::ResetSearchState()
 	std::fill(initialDomains.begin(), initialDomains.end(), (1ULL << n) - 1);
 	std::fill(perm.begin(), perm.end(), Unassigned);
 	numSearches = 0;
+	isComplete = true;
+	subPerms.clear();
 }

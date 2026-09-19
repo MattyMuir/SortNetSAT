@@ -18,6 +18,7 @@
 #include "Prefixes/IntersectionMaximizer.h"
 #include "minisatutil.h"
 #include "UnextendableSetBuilder.h"
+#include "UnextendableSetBuilder2.h"
 #include "SetBuilderChecker.h"
 
 std::vector<uint64_t> GetUnextendableSubset()
@@ -81,8 +82,7 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 		const Network& otherPrefix = allPrefixes[prefixIdx];
 		std::vector<uint64_t> otherOutputs = FactoredOutputSet{ otherPrefix, n }.ToVector();
 
-		solver.ForceUntangledPermutation(otherPrefix);
-		auto result = solver.Solve(unextendableSet, otherOutputs);
+		auto result = solver.Solve(unextendableSet, otherOutputs, false, otherPrefix);
 		if (result == DoesSubsume)
 			numSubsumed++;
 
@@ -120,6 +120,17 @@ void PrintClusterSizes(const std::vector<uint64_t>& a, uint8_t n)
 
 int main()
 {	
-	SetBuilderChecker checker{ 16, 5, true, "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\16_3_sym.txt" };
-	checker.CheckAll();
+	uint8_t n = 18;
+	bool symmetric = true;
+
+	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
+	std::mt19937_64 gen{ 0 };
+	std::ranges::shuffle(allPrefixes, gen);
+	allPrefixes.resize(5'000);
+
+	UnextendableSetBuilder2 builder{ n, 7, 20, symmetric, allPrefixes };
+	auto unextendable = builder.Build();
+
+	SaveOutputSet("UnextendableK2.txt", unextendable);
+	UnextendableSubsetPruning(unextendable);
 }
