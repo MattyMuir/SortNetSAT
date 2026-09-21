@@ -94,43 +94,102 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 	STOP_LOG(t);
 }
 
-bool IsSubset(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b)
+std::vector<std::pair<uint64_t, size_t>> GetScores(const std::vector<Network>& prefixes, uint8_t n, bool symmetric)
 {
-	std::unordered_set<uint64_t> bSet{ b.begin(), b.end() };
-	for (uint64_t ax : a)
-		if (!bSet.contains(ax))
-			return false;
-	return true;
+	std::vector<std::pair<uint64_t, size_t>> scores(1ULL << n);
+	for (uint64_t x = 0; x < (1ULL << n); x++)
+		scores[x] = { x, 0 };
+
+	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
+	{
+		const Network& prefix = prefixes[prefixIdx];
+		std::vector<uint64_t> outputs = FactoredOutputSet{ prefix, n }.ToVector();
+		for (uint64_t output : outputs)
+			scores[output].second++;
+
+		if (prefixIdx % 1000) std::print("{:.3f}%    \r", (double)prefixIdx / prefixes.size() * 100.0);
+	}
+
+	// Sort elements by score
+	std::ranges::sort(scores, std::greater{}, [](auto elem) { return elem.second; });
+
+	// Remove sorted vectors and those with smaller mirrors
+	std::erase_if(scores, [n](auto elem) { return IsSorted(n, elem.first); });
+	if (symmetric)
+		std::erase_if(scores, [n](auto elem) { return HasSmallerMirror(n, elem.first); });
+
+	return scores;
 }
 
-void PrintClusterSizes(const std::vector<uint64_t>& a, uint8_t n)
+std::vector<uint64_t> NaiveScoring()
 {
-	std::vector<size_t> clusterSizes(n + 1);
-	for (uint64_t x : a)
-	{
-		if (std::popcount(x) == 6)
-			std::println("{}", x);
-		clusterSizes[std::popcount(x)]++;
-	}
-		
+	// === Parameters ===
+	uint8_t n = 18;
+	uint8_t d = 7;
+	bool symmetric = true;
+	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
+	// ==================
 
-	for (uint64_t cluster = 0; cluster <= n; cluster++)
-		std::println("{:<2}: {}", cluster, clusterSizes[cluster]);
+	// Get element scores
+	auto scores = GetScores(allPrefixes, n, symmetric);
+
+	// Initialize formula generator and solver
+	FormulaGenerator generator{ n, d, symmetric };
+	Minisat::Solver satSolver;
+	generator.Generate();
+	LoadExpressionMinisat(satSolver, generator.GetExpression());
+
+	std::vector<uint64_t> X;
+	for (;;)
+	{
+		// Solve SAT
+		Minisat::vec<Minisat::Lit> dummy;
+		Timer timer;
+		Minisat::lbool ret = satSolver.solveLimited(dummy);
+		timer.Stop();
+		bool isSat = (ret == Minisat::l_True);
+		std::println("{}: |X| = {} took {}s", isSat ? "SAT" : "UNSAT", X.size(), timer.GetSeconds());
+		if (!isSat) return X;
+		if (X.size() > 50) return X;
+
+		// Reconstruct postfix
+		std::vector<bool> assignment(satSolver.nVars() + 1);
+		for (int i = 0; i < satSolver.nVars(); i++)
+			assignment[i + 1] = (satSolver.model[i] == Minisat::l_True);
+		Network postfix = generator.ParseAssignment(assignment);
+
+		// Choose highest scoring element
+		for (auto [x, _] : scores)
+		{
+			if (IsSorted(n, postfix(x))) continue;
+
+			// Add to X
+			X.push_back(x);
+
+			// Add new input to the generator
+			const Expression& expr = generator.GetExpression();
+			size_t numClausesBefore = expr.NumClauses();
+			Var varsBefore = expr.NumVars();
+			generator.AddInput(x);
+
+			// Add new variables to the solver
+			size_t numVarsAdded = expr.NumVars() - varsBefore;
+			for (size_t i = 0; i < numVarsAdded; i++)
+				satSolver.newVar();
+
+			// Add new clauses to the solver
+			const auto& allClauses = expr.GetClauses();
+			for (size_t i = numClausesBefore; i < allClauses.size(); i++)
+				satSolver.addClause(ConvertClause(allClauses[i]));
+
+			break;
+		}
+	}
 }
 
 int main()
 {	
-	uint8_t n = 18;
-	bool symmetric = true;
-
-	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
-	std::mt19937_64 gen{ 0 };
-	std::ranges::shuffle(allPrefixes, gen);
-	allPrefixes.resize(5'000);
-
-	UnextendableSetBuilder2 builder{ n, 7, 20, symmetric, allPrefixes };
-	auto unextendable = builder.Build();
-
-	SaveOutputSet("UnextendableK2.txt", unextendable);
+	auto unextendable = NaiveScoring();
+	SaveOutputSet("naive.txt", unextendable);
 	UnextendableSubsetPruning(unextendable);
 }

@@ -9,6 +9,11 @@
 #include "Prefixes/prefixes.h"
 #include "Timer.h"
 
+// Determines how an element is scored
+// 0: Scored by how many witnesses it preserves
+// 1: Scored by how many prefixes it preserves
+#define COUNT_PERMS 0
+
 UnextendableSetBuilder2::UnextendableSetBuilder2(uint8_t n_, uint8_t d_, size_t maxWitnesses_, bool symmetric_, const std::vector<Network>& prefixes_)
 	: n(n_), d(d_), maxWitnesses(maxWitnesses_), symmetric(symmetric_), prefixes(prefixes_),
 	generator(n, d, symmetric), subSolver(n, symmetric)
@@ -103,33 +108,58 @@ Permutation UnextendableSetBuilder2::RandomPerm(std::mt19937_64& gen)
 
 void UnextendableSetBuilder2::InitializeWitnesses()
 {
-#if 0
 	// When X is empty, any permutation is a subsumption witness
-	// Choose some randomly
-	std::mt19937_64 gen{ 0 };
-	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
-		for (size_t witnessIdx = 0; witnessIdx < maxWitnesses; witnessIdx++)
-			witnessPerms[prefixIdx].push_back(RandomPerm(gen));
-#else
+	// Use the subSolver to choose initial perms, these will be 'close' to the identity perm
+	// And help incentivise low window-width elements
 	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
 	{
 		subSolver.Solve({}, prefixOutputs[prefixIdx], maxWitnesses);
 		auto [newIsComplete, newWitnesses] = subSolver.GetPerms();
 		witnessPerms[prefixIdx] = newWitnesses;
 	}
-#endif
 }
 
 bool UnextendableSetBuilder2::IsSAT()
 {
-	Minisat::vec<Minisat::Lit> dummy;
+	// Run SAT solver
 	Timer timer;
+	Minisat::vec<Minisat::Lit> dummy;
 	Minisat::lbool ret = satSolver.solveLimited(dummy);
 	timer.Stop();
+
+	// Update stats
 	lastSatTime = timer.GetSeconds();
 	totalSatTime += lastSatTime;
 
 	return ret == Minisat::l_True;
+}
+
+void UnextendableSetBuilder2::RebuildWitnesses(bool forceUntangled)
+{
+	size_t numSubsumed = 0;
+	size_t totalWitnesses = 0;
+	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
+	{
+		std::print("Rebuilding {:.3f}%...     \r", (double)prefixIdx / prefixes.size() * 100.0);
+
+		// Skip non-subsumed prefixes
+		if (witnessPerms[prefixIdx].empty()) continue;
+
+		// Run the solver
+		std::optional<Network> bNetwork = std::nullopt;
+		if (forceUntangled) bNetwork = prefixes[prefixIdx];
+		subSolver.Solve(X, prefixOutputs[prefixIdx], maxWitnesses, bNetwork);
+
+		// Update global witnesses
+		auto [newIsComplete, newWitnesses] = subSolver.GetPerms();
+		witnessPerms[prefixIdx] = newWitnesses;
+		isComplete[prefixIdx] = newIsComplete;
+
+		// Update stats
+		numSubsumed++;
+		totalWitnesses += newWitnesses.size();
+	}
+	std::println("Rebuilding done	 average witnesses: {:.3f}", (double)totalWitnesses / numSubsumed);
 }
 
 void UnextendableSetBuilder2::FilterWitnesses(size_t prefixIdx, uint64_t lastAdded)
@@ -155,7 +185,7 @@ void UnextendableSetBuilder2::FilterWitnesses(size_t prefixIdx, uint64_t lastAdd
 
 std::vector<size_t> UnextendableSetBuilder2::ScoreElements()
 {
-#if 1
+#if COUNT_PERMS
 	std::vector<size_t> scores(1ULL << n, 0);
 	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
 	{

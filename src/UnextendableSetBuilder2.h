@@ -39,6 +39,7 @@ protected:
 	Permutation RandomPerm(std::mt19937_64& gen);
 	void InitializeWitnesses();
 	bool IsSAT();
+	void RebuildWitnesses(bool forceUntangled);
 	void FilterWitnesses(size_t prefixIdx, uint64_t lastAdded);
 	std::vector<size_t> ScoreElements();
 	Network ReconstructPostfix() const;
