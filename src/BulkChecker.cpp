@@ -11,12 +11,8 @@
 #include "IncrementalExtender.h"
 #include "SimpleExtender.h"
 
-BulkChecker::BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::string& filepath)
-	: n(n_), d(d_), symmetric(symmetric_), globalPrefixes(ParsePrefixFile(filepath))
-{
-	std::println("Loaded {} prefixes", globalPrefixes.size());
-	std::cout.flush();
-}
+BulkChecker::BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes)
+	: n(n_), d(d_), symmetric(symmetric_), globalPrefixes(prefixes) {}
 
 void BulkChecker::ShufflePrefixes()
 {

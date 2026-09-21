@@ -36,7 +36,7 @@ protected:
 	std::vector<std::vector<Permutation>> witnessPerms;
 	std::vector<bool> isComplete;
 
-	Permutation RandomPerm(std::mt19937_64& gen);
+	Permutation RandomPerm(std::mt19937_64& gen) const;
 	void InitializeWitnesses();
 	bool IsSAT();
 	void RebuildWitnesses(bool forceUntangled);

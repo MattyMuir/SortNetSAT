@@ -3,20 +3,23 @@
 #include <atomic>
 #include <mutex>
 #include <chrono>
+#include <thread>
 
 #include <sortnetutils.h>
 
-class SetBuilderChecker
+class SetBuilderPruner
 {
 public:
-	SetBuilderChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::string& filepath);
+	SetBuilderPruner(uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_, const std::vector<Network>& prefixes);
 
-	void CheckAll();
+	void Prune();
+	std::vector<Network> GetRemaining() const;
 
 protected:
 	// Parameters
 	uint8_t n, d;
 	bool symmetric;
+	size_t desiredSize;
 	std::vector<Network> globalPrefixes;
 
 	// Global state
@@ -26,5 +29,5 @@ protected:
 	void MarkUnextendable(size_t prefixIdx);
 	std::vector<Network> GetRandomSubset(size_t maxSize) const;
 	void CheckWorker();
-	void Logger();
+	void Logger(std::stop_token st);
 };

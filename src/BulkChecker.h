@@ -14,7 +14,7 @@ protected:
 	using Duration = Clock::duration;
 
 public:
-	BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::string& filepath);
+	BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes);
 
 	void ShufflePrefixes();
 	void CheckRange(size_t start, size_t end);

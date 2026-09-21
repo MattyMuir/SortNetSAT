@@ -74,7 +74,7 @@ std::vector<uint64_t> UnextendableSetBuilder2::Build()
 	return X;
 }
 
-Permutation UnextendableSetBuilder2::RandomPerm(std::mt19937_64& gen)
+Permutation UnextendableSetBuilder2::RandomPerm(std::mt19937_64& gen) const
 {
 	if (!symmetric)
 	{
@@ -167,7 +167,7 @@ void UnextendableSetBuilder2::FilterWitnesses(size_t prefixIdx, uint64_t lastAdd
 	const std::vector<uint64_t>& outputs = prefixOutputs[prefixIdx];
 
 	// Remove permutations which are broken by the added element
-	std::erase_if(witnessPerms[prefixIdx], [&, this](const Permutation& perm) {
+	std::erase_if(witnessPerms[prefixIdx], [&](const Permutation& perm) {
 		uint64_t permuted = perm(lastAdded);
 		bool stillValid = std::binary_search(outputs.begin(), outputs.end(), permuted);
 		return !stillValid;

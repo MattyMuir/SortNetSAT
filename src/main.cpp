@@ -19,7 +19,7 @@
 #include "minisatutil.h"
 #include "UnextendableSetBuilder.h"
 #include "UnextendableSetBuilder2.h"
-#include "SetBuilderChecker.h"
+#include "SetBuilderPruner.h"
 
 std::vector<uint64_t> GetUnextendableSubset()
 {
@@ -94,102 +94,19 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 	STOP_LOG(t);
 }
 
-std::vector<std::pair<uint64_t, size_t>> GetScores(const std::vector<Network>& prefixes, uint8_t n, bool symmetric)
-{
-	std::vector<std::pair<uint64_t, size_t>> scores(1ULL << n);
-	for (uint64_t x = 0; x < (1ULL << n); x++)
-		scores[x] = { x, 0 };
-
-	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
-	{
-		const Network& prefix = prefixes[prefixIdx];
-		std::vector<uint64_t> outputs = FactoredOutputSet{ prefix, n }.ToVector();
-		for (uint64_t output : outputs)
-			scores[output].second++;
-
-		if (prefixIdx % 1000) std::print("{:.3f}%    \r", (double)prefixIdx / prefixes.size() * 100.0);
-	}
-
-	// Sort elements by score
-	std::ranges::sort(scores, std::greater{}, [](auto elem) { return elem.second; });
-
-	// Remove sorted vectors and those with smaller mirrors
-	std::erase_if(scores, [n](auto elem) { return IsSorted(n, elem.first); });
-	if (symmetric)
-		std::erase_if(scores, [n](auto elem) { return HasSmallerMirror(n, elem.first); });
-
-	return scores;
-}
-
-std::vector<uint64_t> NaiveScoring()
-{
-	// === Parameters ===
-	uint8_t n = 18;
-	uint8_t d = 7;
-	bool symmetric = true;
-	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
-	// ==================
-
-	// Get element scores
-	auto scores = GetScores(allPrefixes, n, symmetric);
-
-	// Initialize formula generator and solver
-	FormulaGenerator generator{ n, d, symmetric };
-	Minisat::Solver satSolver;
-	generator.Generate();
-	LoadExpressionMinisat(satSolver, generator.GetExpression());
-
-	std::vector<uint64_t> X;
-	for (;;)
-	{
-		// Solve SAT
-		Minisat::vec<Minisat::Lit> dummy;
-		Timer timer;
-		Minisat::lbool ret = satSolver.solveLimited(dummy);
-		timer.Stop();
-		bool isSat = (ret == Minisat::l_True);
-		std::println("{}: |X| = {} took {}s", isSat ? "SAT" : "UNSAT", X.size(), timer.GetSeconds());
-		if (!isSat) return X;
-		if (X.size() > 50) return X;
-
-		// Reconstruct postfix
-		std::vector<bool> assignment(satSolver.nVars() + 1);
-		for (int i = 0; i < satSolver.nVars(); i++)
-			assignment[i + 1] = (satSolver.model[i] == Minisat::l_True);
-		Network postfix = generator.ParseAssignment(assignment);
-
-		// Choose highest scoring element
-		for (auto [x, _] : scores)
-		{
-			if (IsSorted(n, postfix(x))) continue;
-
-			// Add to X
-			X.push_back(x);
-
-			// Add new input to the generator
-			const Expression& expr = generator.GetExpression();
-			size_t numClausesBefore = expr.NumClauses();
-			Var varsBefore = expr.NumVars();
-			generator.AddInput(x);
-
-			// Add new variables to the solver
-			size_t numVarsAdded = expr.NumVars() - varsBefore;
-			for (size_t i = 0; i < numVarsAdded; i++)
-				satSolver.newVar();
-
-			// Add new clauses to the solver
-			const auto& allClauses = expr.GetClauses();
-			for (size_t i = numClausesBefore; i < allClauses.size(); i++)
-				satSolver.addClause(ConvertClause(allClauses[i]));
-
-			break;
-		}
-	}
-}
-
 int main()
-{	
-	auto unextendable = NaiveScoring();
-	SaveOutputSet("naive.txt", unextendable);
-	UnextendableSubsetPruning(unextendable);
+{
+	// Load prefixes
+	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
+	std::println("Loaded {} prefixes", allPrefixes.size());
+	std::cout.flush();
+
+	// Prune prefix set
+	SetBuilderPruner pruner{ 18, 7, true, 5'000, allPrefixes };
+	pruner.Prune();
+	auto prunedPrefixes = pruner.GetRemaining();
+
+	// Check all remaining
+	BulkChecker checker{ 18, 10, true, prunedPrefixes };
+	checker.CheckAll();
 }

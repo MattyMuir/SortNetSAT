@@ -1,44 +1,49 @@
-#include "SetBuilderChecker.h"
+#include "SetBuilderPruner.h"
 
 #include <iostream>
 #include <print>
 #include <random>
 #include <numeric>
-#include <thread>
 #include <algorithm>
 
 #include "Prefixes/prefixes.h"
 #include "UnextendableSetBuilder.h"
 
-SetBuilderChecker::SetBuilderChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::string& filepath)
-	: n(n_), d(d_), symmetric(symmetric_), globalPrefixes(ParsePrefixFile(filepath)),
-	numRemaining(globalPrefixes.size()), unextendable(globalPrefixes.size())
-{
-	std::println("Loaded {} prefixes", globalPrefixes.size());
-	std::cout.flush();
-}
+SetBuilderPruner::SetBuilderPruner(uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_, const std::vector<Network>& prefixes)
+	: n(n_), d(d_), symmetric(symmetric_), desiredSize(desiredSize_), globalPrefixes(prefixes),
+	numRemaining(globalPrefixes.size()), unextendable(globalPrefixes.size()) {}
 
-void SetBuilderChecker::CheckAll()
+void SetBuilderPruner::Prune()
 {
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
 	std::vector<std::thread> workers;
 	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
 		workers.emplace_back([this]() { CheckWorker(); });
 
-	std::thread logger{ [this]() { Logger(); } };
-	logger.join();
+	std::jthread logger{ [this](std::stop_token st) { Logger(st); } };
 
 	for (std::thread& worker : workers)
 		worker.join();
 }
 
-void SetBuilderChecker::MarkUnextendable(size_t prefixIdx)
+std::vector<Network> SetBuilderPruner::GetRemaining() const
+{
+	std::vector<Network> prefixes;
+	prefixes.reserve(numRemaining);
+	for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
+		if (!unextendable[prefixIdx].load(std::memory_order_relaxed))
+			prefixes.emplace_back(globalPrefixes[prefixIdx]);
+
+	return prefixes;
+}
+
+void SetBuilderPruner::MarkUnextendable(size_t prefixIdx)
 {
 	bool oldValue = unextendable[prefixIdx].exchange(true);
 	if (!oldValue) numRemaining--;
 }
 
-std::vector<Network> SetBuilderChecker::GetRandomSubset(size_t maxSize) const
+std::vector<Network> SetBuilderPruner::GetRandomSubset(size_t maxSize) const
 {
 	// Produce a list of all prefix indices in a random order
 	thread_local std::mt19937_64 gen{ std::random_device{}() };
@@ -61,9 +66,9 @@ std::vector<Network> SetBuilderChecker::GetRandomSubset(size_t maxSize) const
 	return prefixes;
 }
 
-void SetBuilderChecker::CheckWorker()
+void SetBuilderPruner::CheckWorker()
 {
-	for (;;)
+	while (numRemaining.load(std::memory_order_relaxed) > desiredSize)
 	{
 		// Get a random subset and build an unextendable set
 		std::vector<Network> prefixes = GetRandomSubset(5000);
@@ -81,7 +86,6 @@ void SetBuilderChecker::CheckWorker()
 		if (unextendableSet.empty()) continue;
 
 		SubsumptionSolver solver{ n, symmetric };
-		size_t numSubsumed = 0;
 		for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
 		{
 			// Skip already-unextendable prefixes
@@ -99,9 +103,9 @@ void SetBuilderChecker::CheckWorker()
 	}
 }
 
-void SetBuilderChecker::Logger()
+void SetBuilderPruner::Logger(std::stop_token st)
 {
-	for (;;)
+	while (!st.stop_requested())
 	{
 		std::print("Remaining: {}     \r", numRemaining.load(std::memory_order_relaxed));
 		std::cout.flush();
