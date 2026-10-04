@@ -9,9 +9,8 @@
 #include "Prefixes/prefixes.h"
 #include "UnextendableSetBuilder.h"
 
-SetBuilderPruner::SetBuilderPruner(uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_, const std::vector<Network>& prefixes)
-	: n(n_), d(d_), symmetric(symmetric_), desiredSize(desiredSize_), globalPrefixes(prefixes),
-	numRemaining(globalPrefixes.size()), unextendable(globalPrefixes.size()) {}
+SetBuilderPruner::SetBuilderPruner(uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_, PrefixSet& prefixes)
+	: n(n_), d(d_), symmetric(symmetric_), desiredSize(desiredSize_), globalPrefixes(prefixes) {}
 
 void SetBuilderPruner::Prune()
 {
@@ -26,40 +25,23 @@ void SetBuilderPruner::Prune()
 		worker.join();
 }
 
-std::vector<Network> SetBuilderPruner::GetRemaining() const
-{
-	std::vector<Network> prefixes;
-	prefixes.reserve(numRemaining);
-	for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
-		if (!unextendable[prefixIdx].load(std::memory_order_relaxed))
-			prefixes.emplace_back(globalPrefixes[prefixIdx]);
-
-	return prefixes;
-}
-
-void SetBuilderPruner::MarkUnextendable(size_t prefixIdx)
-{
-	bool oldValue = unextendable[prefixIdx].exchange(true);
-	if (!oldValue) numRemaining--;
-}
-
-std::vector<Network> SetBuilderPruner::GetRandomSubset(size_t maxSize) const
+std::vector<const Network*> SetBuilderPruner::GetRandomSubset(size_t maxSize) const
 {
 	// Produce a list of all prefix indices in a random order
 	thread_local std::mt19937_64 gen{ std::random_device{}() };
-	std::vector<size_t> idxs(globalPrefixes.size());
+	std::vector<size_t> idxs(globalPrefixes.Size());
 	std::iota(idxs.begin(), idxs.end(), 0);
 	std::shuffle(idxs.begin(), idxs.end(), gen);
 
-	size_t otherSize = (numRemaining + 1) / 2;
+	size_t otherSize = (globalPrefixes.NumRemaining() + 1) / 2;
 	maxSize = std::min(maxSize, otherSize);
 
 	// Select the first 'maxSize' prefixes which are not already unextendable
-	std::vector<Network> prefixes;
+	std::vector<const Network*> prefixes;
 	for (size_t prefixIdx : idxs)
 	{
-		if (unextendable[prefixIdx].load(std::memory_order_relaxed)) continue;
-		prefixes.push_back(globalPrefixes[prefixIdx]);
+		if (globalPrefixes.State(prefixIdx) != PrefixSet::Unknown) continue;
+		prefixes.push_back(&globalPrefixes[prefixIdx]);
 		if (prefixes.size() == maxSize) break;
 	}
 
@@ -68,11 +50,11 @@ std::vector<Network> SetBuilderPruner::GetRandomSubset(size_t maxSize) const
 
 void SetBuilderPruner::CheckWorker()
 {
-	while (numRemaining.load(std::memory_order_relaxed) > desiredSize)
+	while (globalPrefixes.NumRemaining() > desiredSize)
 	{
 		// Get a random subset and build an unextendable set
-		std::vector<Network> prefixes = GetRandomSubset(5000);
-		UnextendableSetBuilder builder{ n, d, symmetric, prefixes };
+		auto prefixSubset = GetRandomSubset(5000);
+		UnextendableSetBuilder builder{ n, d, symmetric, prefixSubset, false };
 		auto unextendableSet = builder.Build();
 
 		// Log result
@@ -86,10 +68,10 @@ void SetBuilderPruner::CheckWorker()
 		if (unextendableSet.empty()) continue;
 
 		SubsumptionSolver solver{ n, symmetric };
-		for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.size(); prefixIdx++)
+		for (size_t prefixIdx = 0; prefixIdx < globalPrefixes.Size(); prefixIdx++)
 		{
 			// Skip already-unextendable prefixes
-			if (unextendable[prefixIdx].load(std::memory_order_relaxed)) continue;
+			if (globalPrefixes.State(prefixIdx) != PrefixSet::Unknown) continue;
 
 			// Get outputs of other prefix
 			const Network& otherPrefix = globalPrefixes[prefixIdx];
@@ -98,7 +80,7 @@ void SetBuilderPruner::CheckWorker()
 			// Check for subsumption
 			auto result = solver.Solve(unextendableSet, otherOutputs, 1, otherPrefix);
 			if (result == DoesSubsume)
-				MarkUnextendable(prefixIdx);
+				globalPrefixes.SetStatus(prefixIdx, false);
 		}
 	}
 }
@@ -107,7 +89,7 @@ void SetBuilderPruner::Logger(std::stop_token st)
 {
 	while (!st.stop_requested())
 	{
-		std::print("Remaining: {}     \r", numRemaining.load(std::memory_order_relaxed));
+		std::print("Remaining: {}     \r", globalPrefixes.NumRemaining());
 		std::cout.flush();
 		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
 	}

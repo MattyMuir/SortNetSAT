@@ -7,23 +7,22 @@
 #include <unordered_set>
 #include <numeric>
 
-#include "Prefixes/prefixes.h"
 #include "Timer.h"
 
-UnextendableSetBuilder::UnextendableSetBuilder(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes_)
-	: n(n_), d(d_), symmetric(symmetric_), prefixes(prefixes_),
+UnextendableSetBuilder::UnextendableSetBuilder(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<const Network*>& prefixes, bool logging_)
+	: n(n_), d(d_), symmetric(symmetric_), logging(logging_),
 	generator(n, d, symmetric), subSolver(n, symmetric)
 {
 	// Compute prefix outputs
-	for (const Network& prefix : prefixes)
+	for (const Network* prefix : prefixes)
 	{
-		prefixOutputs.emplace_back(FactoredOutputSet{ prefix, n }.ToVector());
+		prefixOutputs.emplace_back(FactoredOutputSet{ *prefix, n}.ToVector());
 		std::ranges::sort(prefixOutputs.back());
 	}
 
-	size_t numPrefixes = prefixes.size();
-	subsumed.assign(numPrefixes, true);
-	witnessPerms.assign(numPrefixes, {});
+	// Initialize global state
+	subsumed.assign(prefixes.size(), true);
+	witnessPerms.assign(prefixes.size(), {});
 }
 
 std::vector<uint64_t> UnextendableSetBuilder::Build()
@@ -38,7 +37,7 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 		// Solve the CNF formula
 		if (!IsSAT())
 		{
-			std::println("UNSAT: |X| = {} solve took {}s", X.size(), lastSatTime);
+			if (logging) std::println("UNSAT: |X| = {} solve took {}s", X.size(), lastSatTime);
 			return X;
 		}
 
@@ -48,7 +47,7 @@ std::vector<uint64_t> UnextendableSetBuilder::Build()
 		size_t numSubsumed = ScoreElements(scores, lastAdded);
 		timer.Stop();
 		totalScoreTime += timer.GetSeconds();
-		std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, lastSatTime);
+		if (logging) std::println("SAT: |X| = {} subsumes {} solve took {}s", X.size(), numSubsumed, lastSatTime);
 
 		if (!numSubsumed) return {};
 
@@ -76,10 +75,13 @@ double UnextendableSetBuilder::GetTotalScoreTime() const
 
 bool UnextendableSetBuilder::IsSAT()
 {
+	// Run and time the SAT solve
 	Minisat::vec<Minisat::Lit> dummy;
 	Timer timer;
 	Minisat::lbool ret = satSolver.solveLimited(dummy);
 	timer.Stop();
+
+	// Update global stats
 	lastSatTime = timer.GetSeconds();
 	totalSatTime += lastSatTime;
 
@@ -95,26 +97,26 @@ bool UnextendableSetBuilder::SubsumedTrivially(size_t prefixIdx, uint64_t lastAd
 size_t UnextendableSetBuilder::ScoreElements(std::vector<size_t>& scores, std::optional<uint64_t> lastAdded)
 {
 	size_t numSubsumed = 0;
-	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
+	for (size_t localIdx = 0; localIdx < prefixOutputs.size(); localIdx++)
 	{
-		if (!subsumed[prefixIdx]) continue;
-		const std::vector<uint64_t>& outputs = prefixOutputs[prefixIdx];
+		if (!subsumed[localIdx]) continue;
+		const std::vector<uint64_t>& outputs = prefixOutputs[localIdx];
 
 		// Check if the previous witness perm is still valid after the last addition
-		if (!lastAdded || !SubsumedTrivially(prefixIdx, *lastAdded))
+		if (!lastAdded || !SubsumedTrivially(localIdx, *lastAdded))
 		{
 			// Run a full subsumption test and update the witness perm
 			if (subSolver.Solve(X, outputs) != DoesSubsume)
 			{
-				subsumed[prefixIdx] = false;
+				subsumed[localIdx] = false;
 				continue;
 			}
-			witnessPerms[prefixIdx] = subSolver.GetPerm();
+			witnessPerms[localIdx] = subSolver.GetPerm();
 		}
 
 		// Update counters
 		numSubsumed++;
-		Permutation invPerm{ witnessPerms[prefixIdx] };
+		Permutation invPerm{ witnessPerms[localIdx] };
 		invPerm.Invert();
 		for (uint64_t bx : outputs)
 			scores[invPerm(bx)]++;

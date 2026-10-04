@@ -97,16 +97,22 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 int main()
 {
 	// Load prefixes
-	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
-	std::println("Loaded {} prefixes", allPrefixes.size());
+	PrefixSet allPrefixes{ "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\16_3_sym.txt" };
+	std::println("Loaded {} prefixes", allPrefixes.Size());
 	std::cout.flush();
 
-	// Prune prefix set
-	SetBuilderPruner pruner{ 18, 7, true, 5'000, allPrefixes };
-	pruner.Prune();
-	auto prunedPrefixes = pruner.GetRemaining();
+	// Launch saving thread
+	std::thread saveThread{ [&]() {
+		std::this_thread::sleep_for(std::chrono::seconds{ 60 });
 
-	// Check all remaining
-	BulkChecker checker{ 18, 10, true, prunedPrefixes };
-	checker.CheckAll();
+		std::println("Saving...!");
+		allPrefixes.SaveStatus("status.txt");
+		std::println("Saved!");
+		} };
+
+	// Prune prefix set
+	SetBuilderPruner pruner{ 18, 5, true, 0, allPrefixes };
+	pruner.Prune();
+
+	saveThread.join();
 }

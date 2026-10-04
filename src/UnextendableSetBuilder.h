@@ -9,7 +9,7 @@
 class UnextendableSetBuilder
 {
 public:
-	UnextendableSetBuilder(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes_);
+	UnextendableSetBuilder(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<const Network*>& prefixes, bool logging_);
 
 	std::vector<uint64_t> Build();
 	double GetTotalSATTime() const;
@@ -18,8 +18,7 @@ public:
 protected:
 	// Parameters
 	uint8_t n, d;
-	bool symmetric;
-	std::vector<Network> prefixes;
+	bool symmetric, logging;
 
 	// Global state
 	std::vector<std::vector<uint64_t>> prefixOutputs;

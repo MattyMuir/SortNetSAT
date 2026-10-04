@@ -6,6 +6,8 @@
 
 #include <sortnetutils.h>
 
+#include "PrefixSet.h"
+
 class BulkChecker
 {
 protected:
@@ -14,9 +16,8 @@ protected:
 	using Duration = Clock::duration;
 
 public:
-	BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes);
+	BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, PrefixSet& prefixes);
 
-	void ShufflePrefixes();
 	void CheckRange(size_t start, size_t end);
 	void CheckAll();
 	std::vector<double> GetSATTimings() const;
@@ -25,7 +26,7 @@ protected:
 	// Parameters
 	uint8_t n, d;
 	bool symmetric;
-	std::vector<Network> globalPrefixes;
+	PrefixSet& globalPrefixes;
 	
 	// Global state
 	std::atomic<size_t> globalPrefixIdx;
@@ -40,6 +41,5 @@ protected:
 
 	void CheckWorker();
 	static double ToSeconds(Duration duration);
-	void SaveNetwork(const Network& network);
 	void LogProgress(size_t prefixIdx, bool extendable, Duration duration);
 };

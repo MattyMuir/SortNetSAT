@@ -9,14 +9,8 @@
 
 #include "IncrementalExtender.h"
 
-BulkChecker::BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, const std::vector<Network>& prefixes)
+BulkChecker::BulkChecker(uint8_t n_, uint8_t d_, bool symmetric_, PrefixSet& prefixes)
 	: n(n_), d(d_), symmetric(symmetric_), globalPrefixes(prefixes) {}
-
-void BulkChecker::ShufflePrefixes()
-{
-	static std::mt19937_64 gen{ std::random_device{}() };
-	std::ranges::shuffle(globalPrefixes, gen);
-}
 
 void BulkChecker::CheckRange(size_t start, size_t end)
 {
@@ -39,7 +33,7 @@ void BulkChecker::CheckRange(size_t start, size_t end)
 
 void BulkChecker::CheckAll()
 {
-	CheckRange(0, globalPrefixes.size());
+	CheckRange(0, globalPrefixes.Size());
 }
 
 std::vector<double> BulkChecker::GetSATTimings() const
@@ -62,8 +56,7 @@ void BulkChecker::CheckWorker()
 		bool extendable = extender.Extend();
 		auto end = Clock::now();
 
-		if (extendable)
-			SaveNetwork(extender.GetNetwork());
+		globalPrefixes.SetStatus(prefixIdx, extendable);
 		LogProgress(prefixIdx, extendable, end - start);
 	}
 }
@@ -73,14 +66,6 @@ double BulkChecker::ToSeconds(Duration duration)
 	using namespace std::chrono_literals;
 	static constexpr size_t CountPerSec = std::chrono::duration_cast<Duration>(1s).count();
 	return (double)duration.count() / CountPerSec;
-}
-
-void BulkChecker::SaveNetwork(const Network& network)
-{
-	std::lock_guard lock{ saveMutex };
-	std::ofstream file{ "networks.txt", std::ios::app };
-	file << std::format("[n={} d={}] {}\n", n, d, network);
-	file.flush();
 }
 
 void BulkChecker::LogProgress(size_t prefixIdx, bool extendable, Duration duration)
@@ -94,7 +79,7 @@ void BulkChecker::LogProgress(size_t prefixIdx, bool extendable, Duration durati
 
 	std::println("Completed {} [{:.5f}%] (Per-thread {:.3f}s) (Overall {:.3f}s)  |   Prefix N.{} is {}",
 		numComplete,
-		(double)numComplete / globalPrefixes.size() * 100.0,
+		(double)numComplete / globalPrefixes.Size() * 100.0,
 		ToSeconds(totalTime) / numComplete,
 		ToSeconds(Clock::now() - startTime) / numComplete,
 		prefixIdx,
