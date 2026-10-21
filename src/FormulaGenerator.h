@@ -30,11 +30,15 @@ class FormulaGenerator
 public:
 	FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_);
 
-	void Generate(const std::vector<uint64_t>& inputs_ = {}, const std::vector<CEd>& fixedComps_ = {}, const std::vector<CEd>& bannedComps_ = {});
+	void Generate(const std::vector<uint64_t>& inputs_ = {});
 	void AddInput(uint64_t input);
 	void AddInputs(const std::vector<uint64_t>& inputs);
 	const Expression& GetExpression() const;
+	
+	// Returns the range [gMin, gMax] of comparator variables
+	std::pair<Var, Var> CompVarRange() const;
 
+	// Expects the comparator variables in the range [gMin, gMax]
 	Network ParseAssignment(const std::vector<bool>& assignment) const;
 	void LogVariableInfo(Var var);
 
@@ -42,10 +46,10 @@ protected:
 	uint8_t n, d;
 	bool symmetric;
 	std::vector<uint64_t> inputs;
-	std::vector<CEd> fixedComps, bannedComps;
 
 	Expression expr;
 	Var trueVar, falseVar;
+	Var compMin, compMax;
 	VariableFamily comps, used, oneDown, oneUp;
 	std::unordered_map<Clause, Var, ClauseHasher> clauseVars;
 
@@ -58,7 +62,6 @@ protected:
 	void AddUpDownDefinitions();
 	void AddOneDownDefinition(uint8_t k, uint8_t i, uint8_t j);
 	void AddOneUpDefinition(uint8_t k, uint8_t i, uint8_t j);
-	void AddCompConstraints();
 
 	void AddPhi1();
 	void AddPhi2();

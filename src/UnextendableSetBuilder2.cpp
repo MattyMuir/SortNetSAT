@@ -231,9 +231,10 @@ std::vector<size_t> UnextendableSetBuilder2::ScoreElements()
 
 Network UnextendableSetBuilder2::ReconstructPostfix() const
 {
-	std::vector<bool> assignment(satSolver.nVars() + 1);
-	for (int i = 0; i < satSolver.nVars(); i++)
-		assignment[i + 1] = (satSolver.model[i] == Minisat::l_True);
+	auto [compMin, compMax] = generator.CompVarRange();
+	std::vector<bool> assignment(compMax - compMin + 1);
+	for (Var v = compMin; v <= compMax; v++)
+		assignment[v - compMin] = (satSolver.model[v - 1] == Minisat::l_True);
 	return generator.ParseAssignment(assignment);
 }
 

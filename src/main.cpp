@@ -96,6 +96,7 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 
 int main()
 {
+#if 0
 	// Load prefixes
 	PrefixSet allPrefixes{ "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\16_3_sym.txt" };
 	std::println("Loaded {} prefixes", allPrefixes.Size());
@@ -115,4 +116,22 @@ int main()
 	pruner.Prune();
 
 	saveThread.join();
+#endif
+
+	Network prefix = ParseNetwork(R"(
+		[(0,6),(1,10),(2,15),(3,5),(4,9),(7,16),(8,13),(11,17),(12,14)]
+		[(0,12),(1,4),(3,11),(5,17),(6,14),(7,8),(9,10),(13,16)]
+		[(1,13),(2,7),(4,16),(6,9),(8,11),(10,15)]
+		[(0,1),(2,3),(4,12),(5,13),(7,9),(8,10),(14,15),(16,17)]
+		)");
+
+	IncrementalExtender extender{ 18, 11, true, prefix, true };
+	bool extendable = extender.Extend();
+
+	if (extendable)
+	{
+		std::println("Extendable!");
+		std::println("{}", extender.GetNetwork());
+	}
+	else std::println("Unextendable");
 }

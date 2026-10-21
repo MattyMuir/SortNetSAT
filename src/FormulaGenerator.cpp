@@ -12,18 +12,15 @@ FormulaGenerator::FormulaGenerator(uint8_t n_, uint8_t d_, bool symmetric_)
 	oneDown(d, n, n),
 	oneUp(d, n, n) {}
 
-void FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_, const std::vector<CEd>& fixedComps_, const std::vector<CEd>& bannedComps_)
+void FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 {
 	inputs = inputs_;
-	fixedComps = fixedComps_;
-	bannedComps = bannedComps_;
 
 	// Add core network structural requirements and definitions
 	InitializeVariables();
 	AddValid();
 	AddUsedDefinitions();
 	AddUpDownDefinitions();
-	AddCompConstraints();
 
 	// Add last layer constraints
 	AddPhi1();
@@ -47,6 +44,11 @@ const Expression& FormulaGenerator::GetExpression() const
 	return expr;
 }
 
+std::pair<Var, Var> FormulaGenerator::CompVarRange() const
+{
+	return { compMin, compMax };
+}
+
 Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment) const
 {
 	Network network;
@@ -60,10 +62,9 @@ Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment) c
 				bool isNeg = l < 0;
 				Var v = std::abs(l);
 
-				if (assignment[v] ^ isNeg)
+				if (assignment[v - compMin] ^ isNeg)
 					network.push_back({ i, j });
 			}
-				
 		}
 	}
 	return network;
@@ -159,10 +160,12 @@ void FormulaGenerator::InitializeVariables()
 	CreateTrueFalse();
 
 	// Comp variables
+	compMin = expr.NumVars() + 1;
 	for (uint8_t k = 0; k < d; k++)
 		for (uint8_t i = 0, jSym = n - 1; i + 1 < n; i++, jSym--)
 			for (uint8_t j = i + 1, iSym = n - 2 - i; j < n; j++, iSym--)
 				comps(k, i, j) = (symmetric && i > iSym) ? comps(k, iSym, jSym) : expr.NextVar();
+	compMax = expr.NumVars();
 
 	// OneUpDown variables
 	for (uint8_t k = 1; k < d; k++)
@@ -402,12 +405,6 @@ void FormulaGenerator::AddInput(uint64_t input)
 void FormulaGenerator::AddInputs(const std::vector<uint64_t>& inputs)
 {
 	for (uint64_t input : inputs) AddInput(input);
-}
-
-void FormulaGenerator::AddCompConstraints()
-{
-	for (auto [k, i, j] : fixedComps) expr.AddClause({ comps(k, i, j) });
-	for (auto [k, i, j] : bannedComps) expr.AddClause({ -comps(k, i, j) });
 }
 
 void FormulaGenerator::AddPhi1()

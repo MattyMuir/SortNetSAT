@@ -66,9 +66,10 @@ std::vector<uint64_t> IncrementalExtender::GetIncludedInputs() const
 
 Network IncrementalExtender::ReconstructPostfix() const
 {
-	std::vector<bool> assignment(solver.nVars() + 1);
-	for (int i = 0; i < solver.nVars(); i++)
-		assignment[i + 1] = (solver.model[i] == Minisat::l_True);
+	auto [compMin, compMax] = generator.CompVarRange();
+	std::vector<bool> assignment(compMax - compMin + 1);
+	for (Var v = compMin; v <= compMax; v++)
+		assignment[v - compMin] = (solver.model[v - 1] == Minisat::l_True);
 	return generator.ParseAssignment(assignment);
 }
 
