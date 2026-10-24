@@ -20,6 +20,7 @@
 #include "UnextendableSetBuilder.h"
 #include "UnextendableSetBuilder2.h"
 #include "SetBuilderPruner.h"
+#include "ImplicationFinder.h"
 
 std::vector<uint64_t> GetUnextendableSubset()
 {
@@ -94,6 +95,17 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 	STOP_LOG(t);
 }
 
+std::vector<uint64_t> RandomSet(uint8_t n, size_t size)
+{
+	static std::mt19937_64 gen{ std::random_device{}() };
+	std::uniform_int_distribution<uint64_t> dist{ 0, (1ULL << n) - 1 };
+
+	std::unordered_set<uint64_t> set;
+	while (set.size() < size)
+		set.insert(dist(gen));
+	return std::vector<uint64_t>(set.begin(), set.end());
+}
+
 int main()
 {
 #if 0
@@ -118,20 +130,26 @@ int main()
 	saveThread.join();
 #endif
 
-	Network prefix = ParseNetwork(R"(
-		[(0,6),(1,10),(2,15),(3,5),(4,9),(7,16),(8,13),(11,17),(12,14)]
-		[(0,12),(1,4),(3,11),(5,17),(6,14),(7,8),(9,10),(13,16)]
-		[(1,13),(2,7),(4,16),(6,9),(8,11),(10,15)]
-		[(0,1),(2,3),(4,12),(5,13),(7,9),(8,10),(14,15),(16,17)]
-		)");
+	uint8_t n = 8;
+	uint8_t d = 4;
+	size_t repeats = 200;
+	bool symmetric = true;
 
-	IncrementalExtender extender{ 18, 11, true, prefix, true };
-	bool extendable = extender.Extend();
+	static std::mt19937_64 gen{ std::random_device{}() };
+	std::uniform_int_distribution<uint64_t> dist{ 0, (1ULL << n) - 1 };
 
-	if (extendable)
+	for (size_t Lsize = 10; Lsize <= 30; Lsize++)
 	{
-		std::println("Extendable!");
-		std::println("{}", extender.GetNetwork());
+		size_t RSum = 0;
+		for (size_t i = 0; i < repeats; i++)
+		{
+			auto L = RandomSet(n, Lsize);
+
+			ImplicationFinder finder{ n, d, symmetric, L };
+			auto implied = finder.FindImplications();
+			RSum += implied.size();
+		}
+
+		std::println("|L| = {}  |R| = {:.3f}", Lsize, (double)RSum / repeats);
 	}
-	else std::println("Unextendable");
 }

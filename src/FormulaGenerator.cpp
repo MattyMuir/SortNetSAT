@@ -33,6 +33,8 @@ void FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	AddPsi2c();
 	AddPsi3a();
 	AddPsi3b();
+	GreedyCompPlacement();
+	NoRedundantComps();
 
 	// Add some initial set of inputs, more can be added later
 	for (uint64_t input : inputs)
@@ -272,7 +274,7 @@ void FormulaGenerator::AddValid()
 
 void FormulaGenerator::AddUsedDefinitions()
 {
-	for (uint8_t k = d - 2; k < d; k++)
+	for (uint8_t k = 0; k < d; k++)
 	{
 		for (uint8_t i = 0; i < n; i++)
 		{
@@ -405,6 +407,17 @@ void FormulaGenerator::AddInput(uint64_t input)
 void FormulaGenerator::AddInputs(const std::vector<uint64_t>& inputs)
 {
 	for (uint64_t input : inputs) AddInput(input);
+}
+
+void FormulaGenerator::BanAssignment(const std::vector<bool>& assignment)
+{
+	Clause banClause;
+	for (size_t i = 0; i < assignment.size(); i++)
+	{
+		Var compVar = compMin + i;
+		banClause.push_back(assignment[i] ? -compVar : compVar);
+	}
+	expr.AddClause(banClause);
 }
 
 void FormulaGenerator::AddPhi1()
@@ -567,6 +580,41 @@ void FormulaGenerator::AddPsi3b()
 			used(d - 2, i),
 			used(d - 2, i + 1)
 			});
+	}
+}
+
+void FormulaGenerator::GreedyCompPlacement()
+{
+	for (uint8_t k = 1; k < d; k++)
+	{
+		for (uint8_t i = 0; i < n; i++)
+		{
+			for (uint8_t j = i + 1; j < n; j++)
+			{
+				expr.AddClause({
+					used(k - 1, i),
+					used(k - 1, j),
+					-comps(k, i, j)
+					});
+			}
+		}
+	}
+}
+
+void FormulaGenerator::NoRedundantComps()
+{
+	for (uint8_t k = 1; k < d - 1; k++)
+	{
+		for (uint8_t i = 0; i < n; i++)
+		{
+			for (uint8_t j = i + 1; j < n; j++)
+			{
+				expr.AddClause({
+					-comps(k - 1, i, j),
+					-comps(k, i, j)
+					});
+			}
+		}
 	}
 }
 

@@ -33,10 +33,11 @@ public:
 	void Generate(const std::vector<uint64_t>& inputs_ = {});
 	void AddInput(uint64_t input);
 	void AddInputs(const std::vector<uint64_t>& inputs);
-	const Expression& GetExpression() const;
+	void BanAssignment(const std::vector<bool>& assignment);
 	
-	// Returns the range [gMin, gMax] of comparator variables
-	std::pair<Var, Var> CompVarRange() const;
+	// Getters
+	const Expression& GetExpression() const;
+	std::pair<Var, Var> CompVarRange() const; // Returns the range [gMin, gMax] of comparator variables
 
 	// Expects the comparator variables in the range [gMin, gMax]
 	Network ParseAssignment(const std::vector<bool>& assignment) const;
@@ -73,6 +74,8 @@ protected:
 	void AddPsi2c();
 	void AddPsi3a();
 	void AddPsi3b();
+	void GreedyCompPlacement();
+	void NoRedundantComps();
 
 	Var GetClauseVar(const Clause& clause);
 	uint64_t LeadingZeros(uint64_t input) const;
