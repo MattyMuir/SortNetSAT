@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <algorithm>
 
-Var Expression::NextVar()
+Literal Expression::NextVar()
 {
 	return nextVar++;
 }
@@ -33,9 +33,9 @@ void Expression::AddComment(const std::string& comment)
 	comments.push_back(comment);
 }
 
-Var Expression::NumVars() const
+size_t Expression::NumVars() const
 {
-	return nextVar - 1;
+	return (size_t)(nextVar - 1);
 }
 
 size_t Expression::NumClauses() const
@@ -74,7 +74,7 @@ void Expression::SanityCheck() const
 		for (Literal l : clause)
 			isUsed[std::abs(l)] = true;
 	size_t numUnused = 0;
-	for (Var v = 1; v < nextVar; v++)
+	for (Literal v = 1; v < nextVar; v++)
 		if (!isUsed[v])
 			numUnused++;
 
@@ -92,7 +92,7 @@ void Expression::SanityCheck() const
 	size_t numDuplicateLiteral = 0;
 	for (const Clause& clause : clauses)
 	{
-		std::unordered_set<Var> vars;
+		std::unordered_set<Literal> vars;
 		for (Literal l : clause) vars.insert(std::abs(l));
 
 		numDuplicateLiteral += (vars.size() != clause.size());

@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <vector>
 
-using Var = int64_t;
 using Literal = int64_t;
 using Clause = std::vector<Literal>;
 

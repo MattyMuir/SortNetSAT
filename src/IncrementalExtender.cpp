@@ -68,7 +68,7 @@ Network IncrementalExtender::ReconstructPostfix() const
 {
 	auto [compMin, compMax] = generator.CompVarRange();
 	std::vector<bool> assignment(compMax - compMin + 1);
-	for (Var v = compMin; v <= compMax; v++)
+	for (Literal v = compMin; v <= compMax; v++)
 		assignment[v - compMin] = (solver.model[v - 1] == Minisat::l_True);
 	return generator.ParseAssignment(assignment);
 }
@@ -176,7 +176,7 @@ void IncrementalExtender::IncludeNewInputs(const std::vector<size_t>& newTestors
 
 	// Add new inputs to the formula
 	size_t numClausesBefore = expr.NumClauses();
-	Var varsBefore = expr.NumVars();
+	size_t varsBefore = expr.NumVars();
 	for (size_t newInputIdx : newTestors)
 		generator.AddInput(excludedInputs[newInputIdx]);
 

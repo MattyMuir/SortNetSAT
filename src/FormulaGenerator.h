@@ -5,24 +5,11 @@
 #include <sortnetutils.h>
 
 #include "Expression.h"
+#include "VariableFamily.h"
 
 struct CEd
 {
 	uint8_t l, lo, hi;
-};
-
-class VariableFamily
-{
-public:
-	VariableFamily() = default;
-	VariableFamily(size_t xWidth, size_t yWidth = 1, size_t zWidth = 1);
-
-	Var& operator()(size_t x, size_t y = 0, size_t z = 0);
-	const Var& operator()(size_t x, size_t y = 0, size_t z = 0) const;
-
-protected:
-	size_t yStride, zStride;
-	std::vector<Var> vars;
 };
 
 class FormulaGenerator
@@ -37,11 +24,11 @@ public:
 	
 	// Getters
 	const Expression& GetExpression() const;
-	std::pair<Var, Var> CompVarRange() const; // Returns the range [gMin, gMax] of comparator variables
+	std::pair<Literal, Literal> CompVarRange() const; // Returns the range [gMin, gMax] of comparator variables
 
 	// Expects the comparator variables in the range [gMin, gMax]
 	Network ParseAssignment(const std::vector<bool>& assignment) const;
-	void LogVariableInfo(Var var);
+	void LogVariableInfo(Literal var);
 
 protected:
 	uint8_t n, d;
@@ -49,10 +36,10 @@ protected:
 	std::vector<uint64_t> inputs;
 
 	Expression expr;
-	Var trueVar, falseVar;
-	Var compMin, compMax;
+	Literal trueVar, falseVar;
+	Literal compMin, compMax;
 	VariableFamily comps, used, oneDown, oneUp;
-	std::unordered_map<Clause, Var, ClauseHasher> clauseVars;
+	std::unordered_map<Clause, Literal, ClauseHasher> clauseVars;
 
 	void CreateTrueFalse();
 	void InitializeVariables();
@@ -77,7 +64,7 @@ protected:
 	void GreedyCompPlacement();
 	void NoRedundantComps();
 
-	Var GetClauseVar(const Clause& clause);
+	Literal GetClauseVar(const Clause& clause);
 	uint64_t LeadingZeros(uint64_t input) const;
 	uint64_t TailingOnes(uint64_t input) const;
 };

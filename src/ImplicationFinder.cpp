@@ -66,7 +66,7 @@ std::vector<bool> ImplicationFinder::GetAssignment() const
 {
 	auto [compMin, compMax] = generator.CompVarRange();
 	std::vector<bool> assignment(compMax - compMin + 1);
-	for (Var v = compMin; v <= compMax; v++)
+	for (Literal v = compMin; v <= compMax; v++)
 		assignment[v - compMin] = (solver.model[v - 1] == Minisat::l_True);
 	return assignment;
 }

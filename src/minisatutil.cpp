@@ -14,7 +14,7 @@ Minisat::vec<Minisat::Lit> ConvertClause(const Clause& clause)
 void LoadExpressionMinisat(Minisat::Solver& solver, const Expression& expr)
 {
 	// Initialize variables
-	for (int64_t i = 0; i < expr.NumVars(); i++)
+	for (size_t i = 0; i < expr.NumVars(); i++)
 		solver.newVar();
 
 	// Add clauses

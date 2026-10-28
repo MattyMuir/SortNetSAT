@@ -21,6 +21,7 @@
 #include "UnextendableSetBuilder2.h"
 #include "SetBuilderPruner.h"
 #include "ImplicationFinder.h"
+#include "FormulaGenerator2.h"
 
 std::vector<uint64_t> GetUnextendableSubset()
 {
@@ -106,9 +107,8 @@ std::vector<uint64_t> RandomSet(uint8_t n, size_t size)
 	return std::vector<uint64_t>(set.begin(), set.end());
 }
 
-int main()
+void PruneAllPrefixes()
 {
-#if 0
 	// Load prefixes
 	PrefixSet allPrefixes{ "C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\16_3_sym.txt" };
 	std::println("Loaded {} prefixes", allPrefixes.Size());
@@ -128,8 +128,10 @@ int main()
 	pruner.Prune();
 
 	saveThread.join();
-#endif
+}
 
+void ImplicationGraph()
+{
 	uint8_t n = 8;
 	uint8_t d = 4;
 	size_t repeats = 200;
@@ -151,5 +153,62 @@ int main()
 		}
 
 		std::println("|L| = {}  |R| = {:.3f}", Lsize, (double)RSum / repeats);
+	}
+}
+
+std::vector<bool> GetAssignment(const Minisat::Solver& solver, const FormulaGenerator2& generator)
+{
+	auto [compMin, compMax] = generator.CompVarRange();
+	std::vector<bool> assignment(compMax - compMin + 1);
+	for (Literal v = compMin; v <= compMax; v++)
+		assignment[v - compMin] = (solver.model[v - 1] == Minisat::l_True);
+	return assignment;
+}
+
+int main()
+{
+	// === Parameters ===
+	uint8_t n = 6;
+	uint8_t depth = 3;
+	bool symmetric = true;
+	// ==================
+
+	static std::mt19937_64 gen{ std::random_device{}() };
+	std::uniform_int_distribution<uint64_t> dist{ 0, (1ULL << n) - 1 };
+
+	for (;;)
+	{
+		uint64_t a = dist(gen);
+		uint64_t b = dist(gen);
+		uint64_t c = dist(gen);
+		uint64_t d = dist(gen);
+
+		FormulaGenerator2 generator{ n, depth, symmetric };
+		generator.Initialize();
+		generator.AddInput(a, RequireSorted);
+		generator.AddInput(b, RequireSorted);
+		generator.AddInput(c, RequireSorted);
+		generator.AddInput(d, RequireUnsorted);
+
+		// Solve the formula
+		Minisat::Solver solver;
+		LoadExpressionMinisat(solver, generator.GetExpression());
+		Minisat::vec<Minisat::Lit> dummy;
+		bool isSat = solver.solveLimited(dummy) == Minisat::l_True;
+
+		if (!isSat)
+		{
+			std::println("{1:0>{0}b} & {2:0>{0}b} & {3:0>{0}b} -> {4:0>{0}b}", n, a, b, c, d);
+			continue;
+		}
+
+		// Check
+		auto assignment = GetAssignment(solver, generator);
+		Network postfix = generator.ParseAssignment(assignment);
+
+		assert(IsSorted(n, postfix(a)));
+		assert(IsSorted(n, postfix(b)));
+		assert(IsSorted(n, postfix(c)));
+		assert(!IsSorted(n, postfix(d)));
 	}
 }

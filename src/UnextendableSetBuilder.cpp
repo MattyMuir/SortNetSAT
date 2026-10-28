@@ -129,7 +129,7 @@ Network UnextendableSetBuilder::ReconstructPostfix() const
 {
 	auto [compMin, compMax] = generator.CompVarRange();
 	std::vector<bool> assignment(compMax - compMin + 1);
-	for (Var v = compMin; v <= compMax; v++)
+	for (Literal v = compMin; v <= compMax; v++)
 		assignment[v - compMin] = (satSolver.model[v - 1] == Minisat::l_True);
 	return generator.ParseAssignment(assignment);
 }
@@ -159,7 +159,7 @@ void UnextendableSetBuilder::AddNewInput(uint64_t x)
 	// Add new input to the generator
 	const Expression& expr = generator.GetExpression();
 	size_t numClausesBefore = expr.NumClauses();
-	Var varsBefore = expr.NumVars();
+	size_t varsBefore = expr.NumVars();
 	generator.AddInput(x);
 
 	// Add new variables to the solver

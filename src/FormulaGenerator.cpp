@@ -46,7 +46,7 @@ const Expression& FormulaGenerator::GetExpression() const
 	return expr;
 }
 
-std::pair<Var, Var> FormulaGenerator::CompVarRange() const
+std::pair<Literal, Literal> FormulaGenerator::CompVarRange() const
 {
 	return { compMin, compMax };
 }
@@ -62,7 +62,7 @@ Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment) c
 			{
 				Literal l = comps(k, i, j);
 				bool isNeg = l < 0;
-				Var v = std::abs(l);
+				Literal v = std::abs(l);
 
 				if (assignment[v - compMin] ^ isNeg)
 					network.push_back({ i, j });
@@ -72,7 +72,7 @@ Network FormulaGenerator::ParseAssignment(const std::vector<bool>& assignment) c
 	return network;
 }
 
-void FormulaGenerator::LogVariableInfo(Var var)
+void FormulaGenerator::LogVariableInfo(Literal var)
 {
 	if (var == trueVar)
 	{
@@ -393,8 +393,8 @@ void FormulaGenerator::AddInput(uint64_t input)
 
 	// Special case for the penultimate set of values
 	// Only the two values on the 0 -> 1 transition are not-fixed
-	Var v0 = v(d - 1, numZeros - 1);
-	Var v1 = v(d - 1, numZeros);
+	Literal v0 = v(d - 1, numZeros - 1);
+	Literal v1 = v(d - 1, numZeros);
 
 	// Exactly one of v0 and v1 must be a 1
 	expr.AddClause({ v0, v1 });
@@ -414,7 +414,7 @@ void FormulaGenerator::BanAssignment(const std::vector<bool>& assignment)
 	Clause banClause;
 	for (size_t i = 0; i < assignment.size(); i++)
 	{
-		Var compVar = compMin + i;
+		Literal compVar = compMin + i;
 		banClause.push_back(assignment[i] ? -compVar : compVar);
 	}
 	expr.AddClause(banClause);
@@ -618,7 +618,7 @@ void FormulaGenerator::NoRedundantComps()
 	}
 }
 
-Var FormulaGenerator::GetClauseVar(const Clause& clause)
+Literal FormulaGenerator::GetClauseVar(const Clause& clause)
 {
 	// Filter out fixed true/false variables
 	Clause sorted;
@@ -638,7 +638,7 @@ Var FormulaGenerator::GetClauseVar(const Clause& clause)
 	// If the clause is new, create a new variable for it
 	if (inserted)
 	{
-		Var v = expr.NextVar();
+		Literal v = expr.NextVar();
 		it->second = v;
 		expr.AddEquals(v, clause);
 	}
@@ -654,17 +654,4 @@ uint64_t FormulaGenerator::LeadingZeros(uint64_t input) const
 uint64_t FormulaGenerator::TailingOnes(uint64_t input) const
 {
 	return std::countl_one(input << (64 - n));
-}
-
-VariableFamily::VariableFamily(size_t xWidth, size_t yWidth, size_t zWidth)
-	: yStride(xWidth), zStride(xWidth * yWidth), vars(xWidth * yWidth * zWidth) {}
-
-Var& VariableFamily::operator()(size_t x, size_t y, size_t z)
-{
-	return vars[z * zStride + y * yStride + x];
-}
-
-const Var& VariableFamily::operator()(size_t x, size_t y, size_t z) const
-{
-	return vars[z * zStride + y * yStride + x];
 }

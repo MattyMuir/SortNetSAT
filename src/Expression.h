@@ -28,12 +28,12 @@ protected:
     };
 
 public:
-    Var NextVar();
+    Literal NextVar();
     void AddClause(const Clause& clause);
     void AddEquals(Literal v, const Clause& clause);
     void AddComment(const std::string& comment);
 
-    Var NumVars() const;
+    size_t NumVars() const;
     size_t NumClauses() const;
     const std::vector<Clause>& GetClauses() const;
 
@@ -41,7 +41,7 @@ public:
     void SanityCheck() const;
 
 protected:
-    Var nextVar = 1;
+    Literal nextVar = 1;
     std::vector<Clause> clauses;
     std::vector<std::string> comments;
 };
