@@ -3,7 +3,7 @@
 
 #include <sortnetutils.h>
 
-#include "FormulaGenerator.h"
+#include "FormulaGenerator2.h"
 #include "minisatutil.h"
 
 class ImplicationFinder
@@ -18,12 +18,14 @@ protected:
 	bool symmetric;
 	std::vector<uint64_t> L;
 
-	FormulaGenerator generator;
-	Minisat::Solver solver;
 	std::vector<bool> implied;
 	size_t numImplied;
 	std::set<std::vector<bool>> allAssignments;
 
-	std::vector<bool> GetAssignment() const;
+	std::vector<bool> GetAssignment(const Minisat::Solver& solver, size_t compMin, size_t compMax) const;
 	void MarkUnimplied(uint64_t x);
+
+	// Returns 'true' if pruning is exact
+	bool PruneImplications(size_t iter);
+	void CheckImplications();
 };

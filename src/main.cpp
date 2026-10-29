@@ -132,15 +132,19 @@ void PruneAllPrefixes()
 
 void ImplicationGraph()
 {
-	uint8_t n = 8;
-	uint8_t d = 4;
-	size_t repeats = 200;
+	// === Parameters ===
+	uint8_t n = 10;
+	uint8_t d = 5;
+	size_t repeats = 50;
 	bool symmetric = true;
+	// ==================
 
 	static std::mt19937_64 gen{ std::random_device{}() };
 	std::uniform_int_distribution<uint64_t> dist{ 0, (1ULL << n) - 1 };
 
-	for (size_t Lsize = 10; Lsize <= 30; Lsize++)
+	std::vector<std::pair<size_t, double>> results;
+
+	for (size_t Lsize = 1; Lsize <= 30; Lsize++)
 	{
 		size_t RSum = 0;
 		for (size_t i = 0; i < repeats; i++)
@@ -152,8 +156,11 @@ void ImplicationGraph()
 			RSum += implied.size();
 		}
 
-		std::println("|L| = {}  |R| = {:.3f}", Lsize, (double)RSum / repeats);
+		results.emplace_back(Lsize, (double)RSum / repeats);
 	}
+
+	for (auto [Lsize, avgImps] : results)
+		std::println("|L| = {}  |R| = {:.3f}", Lsize, avgImps);
 }
 
 std::vector<bool> GetAssignment(const Minisat::Solver& solver, const FormulaGenerator2& generator)
@@ -167,48 +174,5 @@ std::vector<bool> GetAssignment(const Minisat::Solver& solver, const FormulaGene
 
 int main()
 {
-	// === Parameters ===
-	uint8_t n = 6;
-	uint8_t depth = 3;
-	bool symmetric = true;
-	// ==================
-
-	static std::mt19937_64 gen{ std::random_device{}() };
-	std::uniform_int_distribution<uint64_t> dist{ 0, (1ULL << n) - 1 };
-
-	for (;;)
-	{
-		uint64_t a = dist(gen);
-		uint64_t b = dist(gen);
-		uint64_t c = dist(gen);
-		uint64_t d = dist(gen);
-
-		FormulaGenerator2 generator{ n, depth, symmetric };
-		generator.Initialize();
-		generator.AddInput(a, RequireSorted);
-		generator.AddInput(b, RequireSorted);
-		generator.AddInput(c, RequireSorted);
-		generator.AddInput(d, RequireUnsorted);
-
-		// Solve the formula
-		Minisat::Solver solver;
-		LoadExpressionMinisat(solver, generator.GetExpression());
-		Minisat::vec<Minisat::Lit> dummy;
-		bool isSat = solver.solveLimited(dummy) == Minisat::l_True;
-
-		if (!isSat)
-		{
-			std::println("{1:0>{0}b} & {2:0>{0}b} & {3:0>{0}b} -> {4:0>{0}b}", n, a, b, c, d);
-			continue;
-		}
-
-		// Check
-		auto assignment = GetAssignment(solver, generator);
-		Network postfix = generator.ParseAssignment(assignment);
-
-		assert(IsSorted(n, postfix(a)));
-		assert(IsSorted(n, postfix(b)));
-		assert(IsSorted(n, postfix(c)));
-		assert(!IsSorted(n, postfix(d)));
-	}
+	ImplicationGraph();
 }

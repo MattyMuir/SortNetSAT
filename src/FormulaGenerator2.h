@@ -20,6 +20,7 @@ public:
 
 	void Initialize();
 	VariableFamily AddInput(uint64_t input, InputRequirement requirement = RequireSorted);
+	void BanAssignment(const std::vector<bool>& assignment); // Expects the comparator variables in the range [gMin, gMax]
 
 	const Expression& GetExpression() const;
 	std::pair<Literal, Literal> CompVarRange() const; // Returns the range [gMin, gMax] of comparator variables

@@ -170,6 +170,17 @@ VariableFamily FormulaGenerator2::AddInput(uint64_t input, InputRequirement requ
 	return v;
 }
 
+void FormulaGenerator2::BanAssignment(const std::vector<bool>& assignment)
+{
+	Clause banClause;
+	for (size_t i = 0; i < assignment.size(); i++)
+	{
+		Literal compVar = compMin + i;
+		banClause.push_back(assignment[i] ? -compVar : compVar);
+	}
+	expr.AddClause(banClause);
+}
+
 const Expression& FormulaGenerator2::GetExpression() const
 {
 	return expr;
