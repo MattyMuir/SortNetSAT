@@ -96,9 +96,11 @@ void UnextendableSubsetPruning(const std::vector<uint64_t>& unextendableSet)
 	STOP_LOG(t);
 }
 
-std::vector<uint64_t> RandomSet(uint8_t n, size_t size)
+std::vector<uint64_t> RandomSet(uint8_t n, size_t size, size_t seed = 0)
 {
-	static std::mt19937_64 gen{ std::random_device{}() };
+	static std::random_device rd{};
+	if (!seed) seed = rd();
+	std::mt19937_64 gen{ seed };
 	std::uniform_int_distribution<uint64_t> dist{ 0, (1ULL << n) - 1 };
 
 	std::unordered_set<uint64_t> set;
@@ -174,5 +176,11 @@ std::vector<bool> GetAssignment(const Minisat::Solver& solver, const FormulaGene
 
 int main()
 {
-	ImplicationGraph();
+	uint8_t n = 14;
+	uint8_t d = 5;
+	bool symmetric = true;
+
+	auto L = RandomSet(n, 25, 1);
+	ImplicationFinder finder{ n, d, symmetric, L };
+	finder.FindImplications();
 }

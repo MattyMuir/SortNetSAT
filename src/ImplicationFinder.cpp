@@ -21,7 +21,7 @@ std::vector<uint64_t> ImplicationFinder::FindImplications()
 	}
 
 	// Pruning
-	bool complete = PruneImplications(100);
+	bool complete = PruneImplications(10);
 
 	// Checking
 	if (!complete) CheckImplications();
@@ -84,17 +84,19 @@ bool ImplicationFinder::PruneImplications(size_t iter)
 
 		// Update implications
 		Network postfix = generator.ParseAssignment(assignment);
-		for (uint64_t r = 0; r < (1ULL << n); r++)
-		{
-			if (!implied[r]) continue;
-			if (!IsSorted(n, postfix(r))) MarkUnimplied(r);
-			if (!numImplied) return true;
-		}
-
+		DoPrune(postfix);
 		std::println("Found network {}, non-trivial implications remaining: {}", i + 1, numImplied);
+		if (!numImplied) return true;
 	}
 
 	return false;
+}
+
+void ImplicationFinder::DoPrune(const Network& postfix)
+{
+	for (uint64_t r = 0; r < (1ULL << n); r++)
+		if (implied[r] && !IsSorted(n, postfix(r)))
+			MarkUnimplied(r);
 }
 
 void ImplicationFinder::CheckImplications()
@@ -119,7 +121,21 @@ void ImplicationFinder::CheckImplications()
 		// Run the SAT solve
 		Minisat::vec<Minisat::Lit> dummy;
 		bool isSat = (solver.solveLimited(dummy) == Minisat::l_True);
-		std::println("{}", isSat ? "DISPUTED" : "VERIFIED");
-		if (isSat) implied[r] = false;
+		if (!isSat) { std::println("VERIFIED"); continue; }
+
+		// r is disputed
+		MarkUnimplied(r);
+		
+		// Reconstruct postfix
+		auto [compMin, compMax] = generator.CompVarRange();
+		auto assignment = GetAssignment(solver, compMin, compMax);
+		Network postfix = generator.ParseAssignment(assignment);
+		
+		// Check for incidental eliminations
+		size_t impliedBefore = numImplied;
+		DoPrune(postfix);
+		size_t impliedAfter = numImplied;
+		
+		std::println("DISPUTED [-{}    {} remaining]", impliedBefore - impliedAfter + 1, numImplied);
 	}
 }

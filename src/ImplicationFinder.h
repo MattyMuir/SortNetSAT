@@ -27,5 +27,6 @@ protected:
 
 	// Returns 'true' if pruning is exact
 	bool PruneImplications(size_t iter);
+	void DoPrune(const Network& postfix);
 	void CheckImplications();
 };
