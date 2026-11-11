@@ -21,7 +21,7 @@ std::vector<uint64_t> ImplicationFinder::FindImplications()
 	}
 
 	// Pruning
-	bool complete = PruneImplications(10);
+	bool complete = PruneImplications(3);
 
 	// Checking
 	if (!complete) CheckImplications();
@@ -73,13 +73,9 @@ bool ImplicationFinder::PruneImplications(size_t iter)
 		Minisat::lbool ret = solver.solveLimited(dummy);
 		if (ret != Minisat::l_True) { std::println("UNSAT!"); return true; };
 
-		// Get assignment
+		// Ban assignment from future solves
 		auto [compMin, compMax] = generator.CompVarRange();
 		auto assignment = GetAssignment(solver, compMin, compMax);
-		if (allAssignments.contains(assignment)) std::println("Duplicate assignment!");
-		allAssignments.insert(assignment);
-
-		// Ban from future solves
 		generator.BanAssignment(assignment);
 
 		// Update implications

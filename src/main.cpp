@@ -22,6 +22,7 @@
 #include "SetBuilderPruner.h"
 #include "ImplicationFinder.h"
 #include "FormulaGenerator2.h"
+#include "ImplicationBuilder.h"
 
 std::vector<uint64_t> GetUnextendableSubset()
 {
@@ -135,9 +136,9 @@ void PruneAllPrefixes()
 void ImplicationGraph()
 {
 	// === Parameters ===
-	uint8_t n = 10;
-	uint8_t d = 5;
-	size_t repeats = 50;
+	uint8_t n = 12;
+	uint8_t d = 4;
+	size_t repeats = 500;
 	bool symmetric = true;
 	// ==================
 
@@ -146,7 +147,7 @@ void ImplicationGraph()
 
 	std::vector<std::pair<size_t, double>> results;
 
-	for (size_t Lsize = 1; Lsize <= 30; Lsize++)
+	for (size_t Lsize = 11; Lsize <= 11; Lsize++)
 	{
 		size_t RSum = 0;
 		for (size_t i = 0; i < repeats; i++)
@@ -176,11 +177,16 @@ std::vector<bool> GetAssignment(const Minisat::Solver& solver, const FormulaGene
 
 int main()
 {
-	uint8_t n = 14;
+	// === Parameters ===
+	uint8_t n = 8;
 	uint8_t d = 5;
-	bool symmetric = true;
+	bool symmetric = false;
+	// ==================
 
-	auto L = RandomSet(n, 25, 1);
+	std::vector<uint64_t> L;
+	for (uint64_t x = 0; x <= 63; x++)
+		L.push_back(x << 1);
+
 	ImplicationFinder finder{ n, d, symmetric, L };
-	finder.FindImplications();
+	auto implies = finder.FindImplications();
 }

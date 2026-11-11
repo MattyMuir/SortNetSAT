@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sorting network viewer</title>
+<style>
+:root{--bg:#fbfaf7;--ink:#14161a;--muted:#5d636d;--band:#efede6;--line:#cfccc2;--field:#fff;--err:#a3281f;--red:#d62d20;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--ink:#ecebe6;--muted:#9aa0aa;--band:#1f2226;--line:#3a3e45;--field:#1b1e22;--err:#ff8a80;--red:#ff5a4d}}
+:root[data-theme="dark"]{--bg:#15171a;--ink:#ecebe6;--muted:#9aa0aa;--band:#1f2226;--line:#3a3e45;--field:#1b1e22;--err:#ff8a80;--red:#ff5a4d}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,"Iowan Old Style","Times New Roman",serif}
+main{max-width:980px;margin:0 auto;padding:28px 18px 48px}
+h1{font-size:1.7rem;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+p.lead{margin:0 0 18px;color:var(--muted);max-width:62ch}
+textarea,input{width:100%;font:15px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+textarea{resize:vertical;white-space:pre;overflow-x:auto;padding:12px}
+textarea:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+label{display:block;margin:18px 0 6px;font-weight:600}
+label span{font-weight:400;color:var(--muted);margin-left:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row input{flex:1 1 260px;width:auto}
+button{font:inherit;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+button.pri{background:var(--ink);color:var(--bg)}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0;color:var(--muted);font-size:.95rem}
+.stats b{color:var(--ink);font-weight:600}
+.stats .bad b{color:var(--red)}
+.err{color:var(--err);margin:8px 0 0;font-size:.95rem}
+.err:empty{display:none}
+.fig{border:1px solid var(--line);border-radius:4px;background:var(--field);overflow-x:auto;padding:8px 0}
+.fig svg{display:block;margin:0 auto}
+.empty{padding:36px 18px;color:var(--muted);text-align:center}
+.note{color:var(--muted);font-size:.9rem;margin:10px 0 0;max-width:70ch}
+</style>
+</head>
+<body>
+<main>
+<h1>Sorting network viewer</h1>
+<p class="lead">Enter one layer per line. Each comparator is a pair of wire indices, and wires are numbered from 0 at the top.</p>
+<textarea id="src" rows="7" spellcheck="false" autocomplete="off" aria-label="Sorting network">[(0,2),(1,3),(4,6),(5,7)]
+[(0,4),(1,5),(2,6),(3,7)]
+[(0,1),(2,3),(4,5),(6,7)]
+[(2,4),(3,5)]
+[(1,4),(3,6)]
+[(1,2),(3,4),(5,6)]</textarea>
+<div id="err" class="err" role="alert"></div>
+
+<label for="perm">Permutation<span>perm[dst] = src</span></label>
+<div class="row">
+<input id="perm" value="[0,4,2,6,1,5,3,7]" spellcheck="false" autocomplete="off" inputmode="text">
+<button id="apply" class="pri">Apply</button>
+<button id="reset">Reset</button>
+<button id="rand">Random</button>
+<button id="uback">Back</button>
+<button id="ustep">Step</button>
+<button id="untangle" class="pri">Untangle</button>
+</div>
+<div id="perr" class="err" role="alert"></div>
+
+<div class="stats" id="stats"></div>
+<div class="fig" id="fig"></div>
+<p class="note">Numbers on the left are positions. Numbers on the right follow each wire and show its original index. Comparators that end up upside down (their top end on a lower position than their bottom end) turn red. Untangle goes through the upside-down comparators from left to right: at each one the wires detach, then everything to its right swaps so the comparator points the right way. Step goes through the untangling one swap at a time, Back undoes the last swap, and Untangle plays whatever is left.</p>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var src=$('src'),permIn=$('perm'),fig=$('fig'),stats=$('stats'),errBox=$('err'),perr=$('perr');
+var left=44,right=44,top=24,gap=28,colW=8,pad=30,DUR=900,PAUSE=0,MOVE=1,GP=180,MV=520,REST=120,GPX=4;
+var G=null,pos=[],anim=null,raf=0,lay=null,U=null;
+var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function identity(n){var a=[];for(var i=0;i<n;i++)a.push(i);return a}
+function flip(p,c){return p[c.lo]>p[c.hi]?1:0}
+function ease(t){return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2}
+
+function parse(text){
+  var layers=[],errors=[];
+  text.split(/\r?\n/).forEach(function(line,i){
+    if(!line.trim())return;
+    var re=/\(\s*(\d+)\s*,\s*(\d+)\s*\)/g,m,pairs=[];
+    while((m=re.exec(line))){
+      var a=+m[1],b=+m[2];
+      if(a===b){errors.push('Line '+(i+1)+': ('+a+','+b+') connects a wire to itself.');continue}
+      pairs.push([Math.min(a,b),Math.max(a,b)]);
+    }
+    var junk=line.replace(re,'').replace(/[\s\[\],;]/g,'');
+    if(junk)errors.push('Line '+(i+1)+': couldn’t read “'+junk.slice(0,20)+'”. Use the form [(0,2),(1,3)].');
+    if(pairs.length)layers.push(pairs);
+  });
+  return {layers:layers,errors:errors};
+}
+
+function build(){
+  var r=parse(src.value),layers=r.layers;
+  errBox.textContent=r.errors.join(' ');
+  var count=0,maxW=-1;
+  layers.forEach(function(L){count+=L.length;L.forEach(function(p){if(p[1]>maxW)maxW=p[1]})});
+  if(!layers.length){G=null;return}
+  var n=Math.max(maxW+1,pos.length);
+  while(pos.length<n)pos.push(pos.length);
+  var comps=[];
+  layers.forEach(function(L,li){L.forEach(function(p){comps.push({layer:li,lo:p[0],hi:p[1]})})});
+  G={n:n,need:maxW+1,comps:comps,nl:layers.length,layers:layers.length,count:count,H:top*2+(n-1)*gap};
+  lay=layoutFor(pos);
+}
+
+/* Column assignment inside each layer depends on where the wires currently sit. */
+function layoutFor(p,E){
+  var x=left,xs=[],bands=[],ci=0;
+  for(var li=0;li<G.nl;li++){
+    var cols=[],asg=[],items=[];
+    while(ci<G.comps.length&&G.comps[ci].layer===li){items.push(ci);ci++}
+    items.forEach(function(i){
+      var c=G.comps[i],e=E?E[i]:[p[c.lo],p[c.hi]],a=Math.min(e[0],e[1]),b=Math.max(e[0],e[1]),k=0;
+      k=cols.length;
+      if(k===cols.length)cols.push([]);
+      cols[k].push([a,b]);
+      asg.push([i,k]);
+    });
+    asg.forEach(function(t){xs[t[0]]=x+pad+t[1]*colW});
+    var w=pad*2+(cols.length-1)*colW;
+    bands.push({x:x,w:w});
+    x+=w;
+  }
+  return {xs:xs,bands:bands,W:x+right};
+}
+function mixLay(a,b,e){
+  return {xs:a.xs.map(function(v,i){return v+(b.xs[i]-v)*e}),
+    bands:a.bands.map(function(v,i){return {x:v.x+(b.bands[i].x-v.x)*e,w:v.w+(b.bands[i].w-v.w)*e}}),
+    W:a.W+(b.W-a.W)*e};
+}
+
+function y(v){return top+v*gap}
+
+function draw(p,from,to,e,L){
+  L=L||lay;
+  if(!G){fig.innerHTML='<div class="empty">Enter a network above to see its diagram.</div>';return}
+  G.W=L.W;
+  var s='<svg xmlns="http://www.w3.org/2000/svg" width="'+G.W+'" height="'+G.H+'" viewBox="0 0 '+G.W+' '+G.H+'" role="img" aria-label="Sorting network on '+G.n+' wires with '+G.count+' comparators">';
+  L.bands.forEach(function(b,bi){if(bi%2)return;s+='<rect x="'+b.x+'" y="4" width="'+b.w+'" height="'+(G.H-8)+'" fill="var(--band)"/>'});
+  var mono='font-family="ui-monospace,Menlo,Consolas,monospace" font-size="14" fill="var(--muted)"';
+  for(var i=0;i<G.n;i++){
+    s+='<text x="'+(left-20)+'" y="'+(y(i)+5)+'" text-anchor="end" '+mono+'>'+i+'</text>';
+  }
+  for(var w=0;w<G.n;w++){
+    s+='<line x1="'+(left-10)+'" y1="'+y(p[w])+'" x2="'+(G.W-right+14)+'" y2="'+y(p[w])+'" style="stroke:var(--ink)" stroke-width="1.4"/>';
+    s+='<text x="'+(G.W-right+24)+'" y="'+(y(p[w])+5)+'" '+mono+'>'+w+'</text>';
+  }
+  G.comps.forEach(function(c,ci){
+    c.x=L.xs[ci];
+    var a=from?flip(from,c)+(flip(to,c)-flip(from,c))*e:flip(p,c);
+    var col=a>=1?'var(--red)':a<=0?'var(--ink)':'color-mix(in srgb,var(--red) '+Math.round(a*100)+'%,var(--ink))';
+    var y1=y(p[c.lo]),y2=y(p[c.hi]);
+    s+='<line x1="'+c.x+'" y1="'+y1+'" x2="'+c.x+'" y2="'+y2+'" style="stroke:'+col+'" stroke-width="2"/>';
+    s+='<circle cx="'+c.x+'" cy="'+y1+'" r="4.5" style="fill:'+col+'"/><circle cx="'+c.x+'" cy="'+y2+'" r="4.5" style="fill:'+col+'"/>';
+  });
+  fig.innerHTML=s+'</svg>';
+}
+
+function updateStats(target){
+  if(!G){stats.innerHTML='';return}
+  var bad=0;G.comps.forEach(function(c){bad+=flip(target,c)});
+  stats.innerHTML='<span><b>'+G.n+'</b> wires</span><span><b>'+G.count+'</b> comparators</span><span><b>'+G.layers+'</b> layers</span><span'+(bad?' class="bad"':'')+'><b>'+bad+'</b> upside down</span>';
+}
+
+function stop(){
+  cancelAnimationFrame(raf);
+  if(anim){if(!anim.u){pos=anim.to.slice();lay=anim.lay1}anim=null}
+}
+
+function go(to){
+  if(!G)return;
+  cancelAnimationFrame(raf);
+  updateStats(to);
+  var lay1=layoutFor(to);
+  if(reduce){anim=null;pos=to.slice();lay=lay1;draw(pos);return}
+  anim={from:pos.slice(),to:to,lay0:lay,lay1:lay1,t0:performance.now()};
+  raf=requestAnimationFrame(tick);
+}
+function tick(now){
+  var el=now-anim.t0,f=anim.from,to=anim.to;
+  var e=ease(Math.min(1,el/DUR)),e2=ease(Math.min(1,Math.max(0,(el-DUR-PAUSE)/MOVE)));
+  pos=f.map(function(v,i){return v+(to[i]-v)*e});
+  lay=mixLay(anim.lay0,anim.lay1,e2);
+  draw(pos,f,to,e,lay);
+  if(el<DUR+PAUSE+MOVE){raf=requestAnimationFrame(tick)}
+  else{pos=to.slice();lay=anim.lay1;anim=null;draw(pos)}
+}
+
+function readPerm(){
+  var s=permIn.value.trim();
+  if(!/^[\s\[\],\d]*$/.test(s)||!/\d/.test(s))return {error:'Enter a permutation as an array of numbers, like [0,4,2,6,1,5,3,7].'};
+  var a=s.match(/\d+/g).map(Number),n=a.length;
+  if(n<G.need)return {error:'This network uses wires 0 to '+(G.need-1)+', so the permutation needs at least '+G.need+' entries.'};
+  var seen={};
+  for(var i=0;i<n;i++){
+    if(a[i]>=n||seen[a[i]])return {error:'Not a permutation: it must contain each number from 0 to '+(n-1)+' exactly once.'};
+    seen[a[i]]=1;
+  }
+  return {perm:a};
+}
+function apply(){
+  perr.textContent='';
+  exitU();
+  if(!G){perr.textContent='Enter a network first.';return}
+  var r=readPerm();
+  if(r.error){perr.textContent=r.error;return}
+  var n=r.perm.length,to=[];
+  if(n!==pos.length){stop();pos=identity(n);build()}
+  r.perm.forEach(function(srcW,dst){to[srcW]=dst});
+  go(to);
+}
+
+/* ---- Untangling ----
+   Wires are drawn as runs; a swap at comparator t cuts both wires there and exchanges their right-hand parts. */
+function exitU(){
+  if(!U)return;
+  cancelAnimationFrame(raf);anim=null;lay=U.lay0;U=null;
+  draw(pos);updateStats(pos);
+}
+function yAt(runs,w,o){
+  var r=runs[w];
+  for(var i=0;i<r.length;i++)if(r[i].b0<o&&o<=r[i].b1)return r[i].y;
+  return r[r.length-1].y;
+}
+function runsAt(k,m,g){
+  var runs=pos.map(function(v){return [{b0:-1,b1:1e9,y:v,g0:0,g1:0}]});
+  var last=function(w){return runs[w][runs[w].length-1]};
+  var n=Math.min(k+(m>=0?1:0),U.steps.length);
+  for(var s=0;s<n;s++){
+    var st=U.steps[s],c=G.comps[st.ci],a=last(c.lo),b=last(c.hi),ya=a.y,yb=b.y;
+    var part=(s===k&&m>=0),gg=part?g:0;
+    a.b1=b.b1=st.t;a.g1=b.g1=gg;
+    runs[c.lo].push({b0:st.t,b1:1e9,y:part?ya+(yb-ya)*m:yb,g0:gg,g1:0});
+    runs[c.hi].push({b0:st.t,b1:1e9,y:part?yb+(ya-yb)*m:ya,g0:gg,g1:0});
+  }
+  return runs;
+}
+function flipsK(k){
+  var tb=k?U.steps[k-1].t:-1,sg=U.sg[k];
+  return G.comps.map(function(c,i){return U.ord[i]<=tb?0:(sg[c.lo]>sg[c.hi]?1:0)});
+}
+function colOf(a){return a>=1?'var(--red)':a<=0?'var(--ink)':'color-mix(in srgb,var(--red) '+Math.round(a*100)+'%,var(--ink))'}
+function drawR(runs,amt,L){
+  var Wd=L.W;G.W=Wd;
+  var s='<svg xmlns="http://www.w3.org/2000/svg" width="'+Wd+'" height="'+G.H+'" viewBox="0 0 '+Wd+' '+G.H+'" role="img" aria-label="Untangled sorting network">';
+  L.bands.forEach(function(b,bi){if(bi%2)return;s+='<rect x="'+b.x+'" y="4" width="'+b.w+'" height="'+(G.H-8)+'" fill="var(--band)"/>'});
+  var mono='font-family="ui-monospace,Menlo,Consolas,monospace" font-size="14" fill="var(--muted)"';
+  var xo=function(t){return L.xs[U.order[t]]};
+  for(var i=0;i<G.n;i++)s+='<text x="'+(left-20)+'" y="'+(y(i)+5)+'" text-anchor="end" '+mono+'>'+i+'</text>';
+  runs.forEach(function(r,w){
+    r.forEach(function(q){
+      var x1=q.b0<0?left-10:xo(q.b0)+q.g0,x2=q.b1>=1e9?Wd-right+14:xo(q.b1)-q.g1;
+      s+='<line x1="'+x1+'" y1="'+y(q.y)+'" x2="'+x2+'" y2="'+y(q.y)+'" style="stroke:var(--ink)" stroke-width="1.4"/>';
+    });
+    s+='<text x="'+(Wd-right+24)+'" y="'+(y(r[r.length-1].y)+5)+'" '+mono+'>'+w+'</text>';
+  });
+  G.comps.forEach(function(c,i){
+    var o=U.ord[i],x=L.xs[i],col=colOf(amt[i]),y1=y(yAt(runs,c.lo,o)),y2=y(yAt(runs,c.hi,o));
+    s+='<line x1="'+x+'" y1="'+y1+'" x2="'+x+'" y2="'+y2+'" style="stroke:'+col+'" stroke-width="2"/>';
+    s+='<circle cx="'+x+'" cy="'+y1+'" r="4.5" style="fill:'+col+'"/><circle cx="'+x+'" cy="'+y2+'" r="4.5" style="fill:'+col+'"/>';
+  });
+  fig.innerHTML=s+'</svg>';
+}
+function renderU(el){
+  var K=U.steps.length,S=U.step,k,m=-1,g=0,L=U.lay0;
+  if(el<K*S){
+    k=Math.floor(el/S);var r=el-k*S;
+    if(r<GP){m=0;g=GPX*ease(r/GP)}
+    else if(r<GP+MV){m=ease((r-GP)/MV);g=GPX}
+    else if(r<2*GP+MV){m=1;g=GPX*(1-ease((r-GP-MV)/GP))}
+    else{k++}
+  }else{
+    k=K;
+    L=mixLay(U.lay0,U.layF,ease(Math.min(1,Math.max(0,(el-K*S-PAUSE)/MOVE))));
+  }
+  lay=L;
+  var amt=m>=0?U.fl[k].map(function(v,i){return v+(U.fl[k+1][i]-v)*m}):U.fl[k];
+  drawR(runsAt(k,m,g),amt,L);
+  var bad=0;amt.forEach(function(v){if(v>=.5)bad++});
+  stats.innerHTML='<span><b>'+G.n+'</b> wires</span><span><b>'+G.count+'</b> comparators</span><span><b>'+G.layers+'</b> layers</span><span><b>'+(m>=0?k+1:k)+'</b> of '+K+' swaps</span><span'+(bad?' class="bad"':'')+'><b>'+bad+'</b> upside down</span>'+(k===K&&m<0?'<span>output permutation <b>['+U.out.join(',')+']</b></span>':'');
+}
+/* U.P is the position on one timeline: swap s occupies [s*step,(s+1)*step), the final slide comes after. Step and Back move between resting points. */
+function tickU(now){
+  var d=anim.P1>anim.P0?1:-1,P=anim.P0+d*(now-anim.t0);
+  if(d*(P-anim.P1)>=0){U.P=anim.P1;anim=null;renderU(U.P);return}
+  U.P=P;renderU(P);raf=requestAnimationFrame(tickU);
+}
+function goP(P1){
+  cancelAnimationFrame(raf);
+  if(reduce){anim=null;U.P=P1;renderU(P1);return}
+  anim={u:true,t0:performance.now(),P0:U.P,P1:P1};
+  raf=requestAnimationFrame(tickU);
+}
+function uAct(kind){
+  if(!U){if(kind==='back')return;if(!initU())return}
+  var r=[],K=U.steps.length,P=U.P,t=null,i;
+  for(i=0;i<K;i++)r.push(i*U.step);
+  r.push(U.end);
+  if(kind==='play')t=U.end;
+  else if(kind==='step'){for(i=0;i<r.length;i++)if(r[i]>P+1){t=r[i];break}}
+  else{for(i=r.length-1;i>=0;i--)if(r[i]<P-1){t=r[i];break}}
+  if(t!==null)goP(t);
+}
+function initU(){
+  perr.textContent='';
+  if(!G){perr.textContent='Enter a network first.';return}
+  stop();
+  var N=G.comps.length,order=[],ord=[],i;
+  for(i=0;i<N;i++)order.push(i);
+  order.sort(function(a,b){return lay.xs[a]-lay.xs[b]||a-b});
+  order.forEach(function(ci,t){ord[ci]=t});
+  var cur=pos.slice(),sg=[cur.slice()],steps=[];
+  order.forEach(function(ci,t){
+    var c=G.comps[ci];
+    if(cur[c.lo]>cur[c.hi]){
+      steps.push({ci:ci,t:t});
+      var tmp=cur[c.lo];cur[c.lo]=cur[c.hi];cur[c.hi]=tmp;
+      sg.push(cur.slice());
+    }
+  });
+  if(!steps.length){perr.textContent='Nothing to untangle: no comparators are upside down.';return}
+  U={steps:steps,sg:sg,ord:ord,order:order,lay0:lay,step:2*GP+MV+REST,done:false,fl:[]};
+  for(var k=0;k<=steps.length;k++)U.fl.push(flipsK(k));
+  var rf=runsAt(steps.length,-1,0);
+  U.layF=layoutFor(pos,G.comps.map(function(c,j){return [yAt(rf,c.lo,ord[j]),yAt(rf,c.hi,ord[j])]}));
+  var out=[];sg[steps.length].forEach(function(d,w){out[d]=w});
+  U.out=out;U.end=steps.length*U.step+PAUSE+MOVE;U.P=0;
+  return true;
+}
+
+src.addEventListener('input',function(){exitU();stop();build();updateStats(pos);draw(pos)});
+$('apply').addEventListener('click',apply);
+$('untangle').addEventListener('click',function(){uAct('play')});
+$('ustep').addEventListener('click',function(){uAct('step')});
+$('uback').addEventListener('click',function(){uAct('back')});
+permIn.addEventListener('keydown',function(e){if(e.key==='Enter')apply()});
+$('reset').addEventListener('click',function(){perr.textContent='';exitU();if(G)go(identity(pos.length))});
+$('rand').addEventListener('click',function(){
+  if(!G){perr.textContent='Enter a network first.';return}
+  var a=identity(G.n);
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}
+  permIn.value='['+a.join(',')+']';
+  apply();
+});
+
+build();updateStats(pos);draw(pos);
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,4 @@
 #pragma once
-#include <set>
-
 #include <sortnetutils.h>
 
 #include "FormulaGenerator2.h"
@@ -20,7 +18,6 @@ protected:
 
 	std::vector<bool> implied;
 	size_t numImplied;
-	std::set<std::vector<bool>> allAssignments;
 
 	std::vector<bool> GetAssignment(const Minisat::Solver& solver, size_t compMin, size_t compMax) const;
 	void MarkUnimplied(uint64_t x);
