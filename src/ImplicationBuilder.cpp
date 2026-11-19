@@ -27,7 +27,7 @@ std::vector<uint64_t> ImplicationBuilder::Build(size_t size)
     return L;
 }
 
-std::vector<bool> ImplicationBuilder::GetAssignment(const Minisat::Solver& solver, size_t compMin, size_t compMax) const
+std::vector<bool> ImplicationBuilder::GetAssignment(const Minisat::Solver& solver, Literal compMin, Literal compMax)
 {
     std::vector<bool> assignment(compMax - compMin + 1);
     for (Literal v = compMin; v <= compMax; v++)

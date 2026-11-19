@@ -16,7 +16,7 @@ protected:
 
 	std::vector<uint64_t> L;
 
-	std::vector<bool> GetAssignment(const Minisat::Solver& solver, size_t compMin, size_t compMax) const;
+	static std::vector<bool> GetAssignment(const Minisat::Solver& solver, Literal compMin, Literal compMax);
 	std::vector<Network> GetSATNetworks(size_t maxNum);
 	uint64_t ChooseNewElement(const std::vector<size_t>& elemCounts) const;
 };

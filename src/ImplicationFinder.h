@@ -19,7 +19,7 @@ protected:
 	std::vector<bool> implied;
 	size_t numImplied;
 
-	std::vector<bool> GetAssignment(const Minisat::Solver& solver, size_t compMin, size_t compMax) const;
+	static std::vector<bool> GetAssignment(const Minisat::Solver& solver, Literal compMin, Literal compMax);
 	void MarkUnimplied(uint64_t x);
 
 	// Returns 'true' if pruning is exact

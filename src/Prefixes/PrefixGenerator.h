@@ -5,7 +5,6 @@
 
 #include <sortnetutils.h>
 
-#include "SubsumptionSolver.h"
 #include "PrefixDescriptor.h"
 
 class PrefixGenerator

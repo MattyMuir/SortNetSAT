@@ -2,7 +2,7 @@
 #include <atomic>
 #include <optional>
 
-#include "NetworkSignature.h"
+#include <subsumption.h>
 
 class PrefixDescriptor
 {

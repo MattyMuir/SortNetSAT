@@ -3,10 +3,10 @@
 #include <random>
 
 #include <sortnetutils.h>
+#include <subsumption.h>
 
 #include "minisatutil.h"
 #include "FormulaGenerator.h"
-#include "Prefixes/SubsumptionSolver.h"
 
 class UnextendableSetBuilder2
 {

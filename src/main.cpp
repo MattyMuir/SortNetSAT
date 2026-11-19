@@ -177,16 +177,16 @@ std::vector<bool> GetAssignment(const Minisat::Solver& solver, const FormulaGene
 
 int main()
 {
-	// === Parameters ===
-	uint8_t n = 8;
-	uint8_t d = 5;
-	bool symmetric = false;
-	// ==================
+	auto allPrefixes = ParsePrefixFile("C:\\Users\\matty\\source\\repos\\SortNetSAT\\prefixes\\18_3_sym.txt");
 
-	std::vector<uint64_t> L;
-	for (uint64_t x = 0; x <= 63; x++)
-		L.push_back(x << 1);
+	static std::mt19937_64 gen{ 0 };
+	std::ranges::shuffle(allPrefixes, gen);
 
-	ImplicationFinder finder{ n, d, symmetric, L };
-	auto implies = finder.FindImplications();
+	std::vector<const Network*> prefixes;
+	for (size_t i = 0; i < 5'000; i++)
+		prefixes.push_back(&allPrefixes[i]);
+
+	UnextendableSetBuilder builder{ 18, 7, true, prefixes, true };
+	auto unextendable = builder.Build();
+	SaveOutputSet("C:\\Users\\matty\\Desktop\\unextendable.txt", unextendable);
 }
