@@ -7,7 +7,7 @@
 #include "FormulaGenerator.h"
 
 SimpleExtender::SimpleExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix)
-	: Extender(n_, d_, symmetric_, prefix), generator(n, dPost, symmetric)
+	: Extender(n_, symmetric_, prefix), generator(n, d_, symmetric)
 {
 	solver.verbosity = 0;
 }

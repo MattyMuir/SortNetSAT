@@ -8,7 +8,7 @@
 #include "Prefixes/prefixes.h"
 
 IncrementalExtender::IncrementalExtender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix, bool logging_)
-	: Extender(n_, d_, symmetric_, prefix), logging(logging_), generator(n, dPost, symmetric)
+	: Extender(n_, symmetric_, prefix), logging(logging_), generator(n, d_, symmetric)
 {
 	solver.verbosity = 0;
 }
@@ -119,27 +119,10 @@ uint64_t IncrementalExtender::CountInversions(uint64_t output) const
 
 std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<FailingInput>& failing) const
 {
-#if 0
-	std::vector<size_t> newTestors;
-	for (auto [failingIdx, failingOutput] : failing)
-		newTestors.push_back(failingIdx);
-
-	thread_local std::mt19937_64 gen{ std::random_device{}() };
-	std::shuffle(newTestors.begin(), newTestors.end(), gen);
-
-	if (newTestors.size() > maxAddNum)
-		newTestors.resize(maxAddNum);
-
-	return newTestors;
-#else
 	// TODO: Better inversion count, not just adjacent inversions
-
 	struct InputCost
 	{
 		uint64_t windowWidth, similarity, nonInverted;
-		//uint64_t windowWidth, unsimilarity, nonInverted;
-		//uint64_t unsimilarity, windowWidth, nonInverted;
-		//uint64_t windowWidth, random;
 		auto operator<=>(const InputCost& other) const = default;
 	};
 
@@ -167,7 +150,6 @@ std::vector<size_t> IncrementalExtender::ChooseNewTestors(const std::vector<Fail
 		newTestors.push_back(failingIdx);
 
 	return newTestors;
-#endif
 }
 
 void IncrementalExtender::IncludeNewInputs(const std::vector<size_t>& newTestors)

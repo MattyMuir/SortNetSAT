@@ -9,8 +9,8 @@
 #include "Prefixes/prefixes.h"
 #include "UnextendableSetBuilder.h"
 
-SetBuilderPruner::SetBuilderPruner(uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_, PrefixSet& prefixes)
-	: n(n_), d(d_), symmetric(symmetric_), desiredSize(desiredSize_), globalPrefixes(prefixes) {}
+SetBuilderPruner::SetBuilderPruner(PrefixSet& prefixes, uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_)
+	: globalPrefixes(prefixes), n(n_), d(d_), symmetric(symmetric_), desiredSize(desiredSize_) {}
 
 void SetBuilderPruner::Prune()
 {

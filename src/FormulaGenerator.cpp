@@ -33,8 +33,6 @@ void FormulaGenerator::Generate(const std::vector<uint64_t>& inputs_)
 	AddPsi2c();
 	AddPsi3a();
 	AddPsi3b();
-	GreedyCompPlacement();
-	NoRedundantComps();
 
 	// Add some initial set of inputs, more can be added later
 	for (uint64_t input : inputs)

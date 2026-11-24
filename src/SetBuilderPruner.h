@@ -12,16 +12,16 @@
 class SetBuilderPruner
 {
 public:
-	SetBuilderPruner(uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_, PrefixSet& prefixes);
+	SetBuilderPruner(PrefixSet& prefixes, uint8_t n_, uint8_t d_, bool symmetric_, size_t desiredSize_);
 
 	void Prune();
 
 protected:
 	// Parameters
+	PrefixSet& globalPrefixes;
 	uint8_t n, d;
 	bool symmetric;
 	size_t desiredSize;
-	PrefixSet& globalPrefixes;
 
 	std::vector<const Network*> GetRandomSubset(size_t maxSize) const;
 	void CheckWorker();

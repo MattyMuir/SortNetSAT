@@ -2,8 +2,8 @@
 
 #include "Prefixes/WindowMinimizer.h"
 
-Extender::Extender(uint8_t n_, uint8_t d_, bool symmetric_, const Network& prefix)
-	: n(n_), d(d_), dPost(d - prefix.Depth()), symmetric(symmetric_)
+Extender::Extender(uint8_t n_, bool symmetric_, const Network& prefix)
+	: n(n_), symmetric(symmetric_)
 {
 	WindowMinimizer minimizer{ n, symmetric, 1234 };
 	optimizedPrefix = minimizer.Optimize(prefix, 256, 256);
