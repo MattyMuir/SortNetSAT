@@ -48,6 +48,7 @@ void BulkChecker::CheckWorker()
 		// Get the next prefix from globalPrefixes
 		size_t prefixIdx = globalPrefixIdx.fetch_add(1, std::memory_order_relaxed);
 		if (prefixIdx >= globalEndIdx) break;
+		if (globalPrefixes.State(prefixIdx) != PrefixSet::Unknown) continue;
 		const Network& prefix = globalPrefixes[prefixIdx];
 
 		// Check if this prefix is extendable

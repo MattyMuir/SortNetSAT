@@ -91,6 +91,6 @@ void SetBuilderPruner::Logger(std::stop_token st)
 	{
 		std::print("Remaining: {}     \r", globalPrefixes.NumRemaining());
 		std::cout.flush();
-		std::this_thread::sleep_for(std::chrono::milliseconds{ 50 });
+		std::this_thread::sleep_for(std::chrono::milliseconds{ 5000 });
 	}
 }

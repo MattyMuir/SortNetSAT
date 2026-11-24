@@ -25,6 +25,7 @@ public:
 	const Network& operator[](size_t idx) const;
 
 	void SaveStatus(const std::string& filepath) const;
+	void LoadStatus(const std::string& filepath);
 
 protected:
 	std::vector<Network> prefixes;

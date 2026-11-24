@@ -1,6 +1,7 @@
 #include "PrefixSet.h"
 
 #include <fstream>
+#include <cassert>
 
 PrefixSet::PrefixSet(const std::string& filepath)
 {
@@ -48,4 +49,19 @@ void PrefixSet::SaveStatus(const std::string& filepath) const
 	std::ofstream file{ filepath };
 	for (size_t prefixIdx = 0; prefixIdx < prefixes.size(); prefixIdx++)
 		file << status[prefixIdx].load(std::memory_order_relaxed) << '\n';
+}
+
+void PrefixSet::LoadStatus(const std::string& filepath)
+{
+	std::ifstream file{ filepath };
+
+	size_t prefixIdx = 0;
+	std::string line;
+	while (std::getline(file, line))
+	{
+		Status newStatus = (Status)std::stoi(line);
+		status[prefixIdx++].store(newStatus, std::memory_order_relaxed);
+	}
+
+	assert(prefixIdx == prefixes.size());
 }
